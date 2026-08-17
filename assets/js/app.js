@@ -61,6 +61,9 @@ function parseHash() {
   if (parts[0] === 'export') {
     return { view: 'export' };
   }
+  if (parts[0] === 'review') {
+    return { view: 'review' };
+  }
   return { view: 'dashboard' };
 }
 
@@ -88,7 +91,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   render();
 });
 
-const BACKEND_ONLY_VIEWS = new Set(['doc-new', 'doc-edit', 'doc-view', 'doc-upload', 'library', 'search', 'export']);
+const BACKEND_ONLY_VIEWS = new Set(['doc-new', 'doc-edit', 'doc-view', 'doc-upload', 'library', 'search', 'export', 'review']);
 
 function render() {
   const route = parseHash();
@@ -118,6 +121,8 @@ function render() {
     renderSearchPage();
   } else if (route.view === 'export') {
     renderExportPage();
+  } else if (route.view === 'review') {
+    renderReviewPage();
   } else {
     renderDashboard();
   }
@@ -237,6 +242,15 @@ function renderReader(surah, ayahNum) {
           <div class="empty-state" style="padding:14px 0;">Loading...</div>
         </div>
       </div>
+
+      <div class="notes-panel">
+        <div class="notes-label-row">
+          <span class="notes-label">Matched Passages &middot; ${surah.number}:${ayah.n}</span>
+        </div>
+        <div id="matched-passages-list" class="linked-docs-list">
+          <div class="empty-state" style="padding:14px 0;">Loading...</div>
+        </div>
+      </div>
       ` : ''}
 
       <div class="reader-footer-nav">
@@ -283,6 +297,7 @@ function renderReader(surah, ayahNum) {
       navigate(`#/doc/new?surah=${surah.number}&ayah=${ayah.n}`);
     });
     loadLinkedDocs(surah.number, ayah.n);
+    loadMatchedPassages(surah.number, ayah.n);
   }
 
   // Keyboard navigation (ignore when typing in inputs)
@@ -314,6 +329,43 @@ async function loadLinkedDocs(surahNum, ayahNum) {
       <span class="linked-doc-date">Updated ${new Date(d.updatedAt).toLocaleDateString()}</span>
     </a>
   `).join('');
+}
+
+async function loadMatchedPassages(surahNum, ayahNum) {
+  const listEl = document.getElementById('matched-passages-list');
+  if (!listEl) return;
+  let hits;
+  try {
+    hits = await API.passagesForAyah(surahNum, ayahNum);
+  } catch {
+    listEl.innerHTML = '<div class="empty-state" style="padding:14px 0;">Can\'t reach the local server.</div>';
+    return;
+  }
+  if (!hits.length) {
+    listEl.innerHTML = '<div class="empty-state" style="padding:14px 0;">No matched passages for this ayah yet.</div>';
+    return;
+  }
+  listEl.innerHTML = hits.map(({ passage, doc, matches }) => {
+    const match = matches[0];
+    const badge = match.source === 'explicit'
+      ? '<span class="badge match-badge explicit">Explicit reference</span>'
+      : match.source === 'manual'
+        ? '<span class="badge match-badge manual">Manually added</span>'
+        : `<span class="badge match-badge llm">${Math.round(match.confidence * 100)}% match</span>`;
+    const locBits = [];
+    if (passage.location?.page) locBits.push(`p. ${passage.location.page}`);
+    if (passage.location?.section) locBits.push(passage.location.section);
+    return `
+      <a class="linked-doc-item passage-item" href="#/doc/${doc.id}">
+        <div class="passage-item-main">
+          <span class="linked-doc-title">${escapeHtml(doc.title)}</span>
+          <p class="passage-snippet">${escapeHtml(passage.text.slice(0, 220))}${passage.text.length > 220 ? '…' : ''}</p>
+          ${locBits.length ? `<span class="passage-location">${locBits.map(escapeHtml).join(' &middot; ')}</span>` : ''}
+        </div>
+        ${badge}
+      </a>
+    `;
+  }).join('');
 }
 
 function escapeHtml(str) {

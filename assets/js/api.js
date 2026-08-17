@@ -76,4 +76,37 @@ const API = {
     }
     return r.blob();
   },
+  async processDoc(id, force) {
+    const r = await fetch(`/api/docs/${id}/process`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ force: !!force }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || 'Processing failed');
+    }
+    return r.json();
+  },
+  async docPassages(id) {
+    return (await fetch(`/api/docs/${id}/passages`)).json();
+  },
+  async passagesForAyah(surah, ayah) {
+    return (await fetch(`/api/ayah/${surah}/${ayah}/passages`)).json();
+  },
+  async reviewQueue() {
+    return (await fetch('/api/review-queue')).json();
+  },
+  async reviewPassage(id, body) {
+    const r = await fetch(`/api/passages/${id}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || 'Review action failed');
+    }
+    return r.json();
+  },
 };

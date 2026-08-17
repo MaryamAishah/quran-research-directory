@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import multer from 'multer';
 import fs from 'fs';
@@ -9,13 +10,17 @@ import http from 'http';
 
 import {
   listDocs, getDoc, createDoc, updateDoc, deleteDoc,
-  docsForAyah, backlinksFor, IMAGES_DIR,
+  docsForAyah, backlinksFor, IMAGES_DIR, ORIGINALS_DIR,
 } from './lib/docStore.js';
 import { reindexDoc, removeDocFromIndex, semanticSearch, ensureModelWarm } from './lib/search.js';
 import { buildExportHtml } from './lib/exportBuilder.js';
 import { htmlToPdf } from './lib/pdfExport.js';
 import { htmlToDocx } from './lib/docxExport.js';
 import { fileToHtml } from './lib/fileImport.js';
+import { processDocument } from './lib/passagePipeline.js';
+import { ensureAyahEmbeddingsReady } from './lib/ayahEmbeddings.js';
+import { passagesForDoc, passagesForAyah, passagesNeedingReview, getPassage, updatePassage } from './lib/passageStore.js';
+import { ayahByRef } from './lib/quranData.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -30,6 +35,7 @@ app.get('/', (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
 app.get('/index.html', (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
 app.use('/assets', express.static(path.join(ROOT, 'assets')));
 app.use('/media', express.static(IMAGES_DIR));
+app.use('/originals', express.static(ORIGINALS_DIR));
 
 // ---------- Documents CRUD ----------
 app.get('/api/docs', (req, res) => {
@@ -50,14 +56,22 @@ app.post('/api/docs', async (req, res) => {
   const { title, html, linkedAyat, id } = req.body;
   const doc = createDoc({ title, html, linkedAyat, id });
   reindexDoc(doc).catch(err => console.error('reindex failed', err));
+  processDocument(doc.id).catch(err => console.error('passage processing failed', err));
   res.json(doc);
 });
 
 app.put('/api/docs/:id', async (req, res) => {
   const { title, html, linkedAyat } = req.body;
+  const existed = getDoc(req.params.id);
   const doc = updateDoc(req.params.id, { title, html, linkedAyat });
   if (!doc) return res.status(404).json({ error: 'Not found' });
   reindexDoc(doc).catch(err => console.error('reindex failed', err));
+  // Only auto-(re)process documents that already opted into the pipeline
+  // (i.e. were created after this feature shipped) - pre-existing legacy
+  // documents are left untouched unless explicitly processed via the API.
+  if (existed.processing !== undefined) {
+    processDocument(doc.id).catch(err => console.error('passage processing failed', err));
+  }
   res.json(doc);
 });
 
@@ -72,6 +86,71 @@ app.get('/api/ayah/:surah/:ayah/docs', (req, res) => {
   const surah = parseInt(req.params.surah, 10);
   const ayah = parseInt(req.params.ayah, 10);
   res.json(docsForAyah(surah, ayah));
+});
+
+// ---------- Passage-to-ayah matching pipeline ----------
+app.post('/api/docs/:id/process', async (req, res) => {
+  const doc = getDoc(req.params.id);
+  if (!doc) return res.status(404).json({ error: 'Not found' });
+  try {
+    await processDocument(req.params.id, { force: !!req.body?.force });
+    res.json(getDoc(req.params.id));
+  } catch (err) {
+    console.error('manual process failed', err);
+    res.status(500).json({ error: err.message || 'Processing failed' });
+  }
+});
+
+app.get('/api/docs/:id/passages', (req, res) => {
+  res.json(passagesForDoc(req.params.id));
+});
+
+app.get('/api/ayah/:surah/:ayah/passages', (req, res) => {
+  const surah = parseInt(req.params.surah, 10);
+  const ayah = parseInt(req.params.ayah, 10);
+  const hits = passagesForAyah(surah, ayah);
+  const docsById = new Map(listDocs().map(d => [d.id, d]));
+  const enriched = hits
+    .map(h => ({ ...h, doc: docsById.get(h.passage.docId) }))
+    .filter(h => h.doc);
+  res.json(enriched);
+});
+
+app.get('/api/review-queue', (req, res) => {
+  const docsById = new Map(listDocs().map(d => [d.id, d]));
+  const enriched = passagesNeedingReview()
+    .map(p => ({ passage: p, doc: docsById.get(p.docId) }))
+    .filter(p => p.doc);
+  res.json(enriched);
+});
+
+app.post('/api/passages/:id/review', (req, res) => {
+  const passage = getPassage(req.params.id);
+  if (!passage) return res.status(404).json({ error: 'Not found' });
+  const { action, matchIndex, matches } = req.body;
+
+  if (action === 'accept' || action === 'reject') {
+    if (typeof matchIndex !== 'number' || !passage.matches[matchIndex]) {
+      return res.status(400).json({ error: 'Invalid matchIndex' });
+    }
+    const updated = [...passage.matches];
+    updated[matchIndex] = { ...updated[matchIndex], status: action === 'accept' ? 'accepted' : 'rejected' };
+    return res.json(updatePassage(passage.id, { matches: updated }));
+  }
+
+  if (action === 'set') {
+    if (!Array.isArray(matches)) return res.status(400).json({ error: 'matches must be an array' });
+    const validated = [];
+    for (const m of matches) {
+      const surah = parseInt(m.surah, 10);
+      const ayah = parseInt(m.ayah, 10);
+      if (!ayahByRef(surah, ayah)) continue; // reject invalid refs (requirement #15)
+      validated.push({ surah, ayah, confidence: 1, source: 'manual', status: 'accepted' });
+    }
+    return res.json(updatePassage(passage.id, { matches: validated }));
+  }
+
+  res.status(400).json({ error: 'Unknown action' });
 });
 
 // ---------- Semantic search ----------
@@ -119,8 +198,22 @@ app.post('/api/docs/upload', upload.single('file'), async (req, res) => {
     const html = await fileToHtml(req.file.buffer, req.file.originalname, id);
     const title = (req.body.title || '').trim() || path.basename(req.file.originalname, ext);
 
-    const doc = createDoc({ id, title, html, linkedAyat });
+    // Preserve the original upload untouched, regardless of what the HTML
+    // conversion produced (requirement: source traceability).
+    const origDir = path.join(ORIGINALS_DIR, id);
+    fs.mkdirSync(origDir, { recursive: true });
+    const storedName = `original${ext}`;
+    fs.writeFileSync(path.join(origDir, storedName), req.file.buffer);
+    const sourceFile = {
+      originalName: req.file.originalname,
+      storedName,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+    };
+
+    const doc = createDoc({ id, title, html, linkedAyat, sourceFile });
     reindexDoc(doc).catch(err => console.error('reindex failed', err));
+    processDocument(doc.id).catch(err => console.error('passage processing failed', err));
     res.json(doc);
   } catch (err) {
     console.error('doc upload failed', err);
@@ -196,4 +289,5 @@ app.post('/api/export', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Quran Research Directory running at http://localhost:${PORT}`);
   ensureModelWarm().then(() => console.log('Semantic search model ready.'));
+  ensureAyahEmbeddingsReady().then(() => console.log('Ayah embedding index ready.'));
 });

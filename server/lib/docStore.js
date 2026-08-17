@@ -2,14 +2,17 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import { deletePassagesForDoc } from './passageStore.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const DOCS_DIR = path.join(DATA_DIR, 'documents');
 const IMAGES_DIR = path.join(DATA_DIR, 'images');
+const ORIGINALS_DIR = path.join(DATA_DIR, 'originals');
 
 fs.mkdirSync(DOCS_DIR, { recursive: true });
 fs.mkdirSync(IMAGES_DIR, { recursive: true });
+fs.mkdirSync(ORIGINALS_DIR, { recursive: true });
 
 const DOC_LINK_RE = /href="#\/doc\/([a-f0-9-]{36})"/g;
 
@@ -58,7 +61,7 @@ export function getDoc(id) {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 
-export function createDoc({ title, html, linkedAyat, id }) {
+export function createDoc({ title, html, linkedAyat, id, sourceFile }) {
   id = id && /^[a-f0-9-]{36}$/.test(id) ? id : crypto.randomUUID();
   const now = Date.now();
   const doc = {
@@ -67,6 +70,8 @@ export function createDoc({ title, html, linkedAyat, id }) {
     html: html || '',
     linkedAyat: Array.isArray(linkedAyat) ? linkedAyat : [],
     wikiLinks: extractWikiLinks(html || ''),
+    sourceFile: sourceFile || null,
+    processing: { status: 'none', error: null, contentHash: null, updatedAt: now },
     createdAt: now,
     updatedAt: now,
   };
@@ -89,12 +94,26 @@ export function updateDoc(id, { title, html, linkedAyat }) {
   return updated;
 }
 
+export function setProcessing(id, patch) {
+  const existing = getDoc(id);
+  if (!existing) return null;
+  const updated = {
+    ...existing,
+    processing: { ...(existing.processing || {}), ...patch, updatedAt: Date.now() },
+  };
+  fs.writeFileSync(docPath(id), JSON.stringify(updated, null, 2), 'utf8');
+  return updated;
+}
+
 export function deleteDoc(id) {
   const p = docPath(id);
   if (!fs.existsSync(p)) return false;
   fs.unlinkSync(p);
   const imgDir = path.join(IMAGES_DIR, id);
   if (fs.existsSync(imgDir)) fs.rmSync(imgDir, { recursive: true, force: true });
+  const origDir = path.join(ORIGINALS_DIR, id);
+  if (fs.existsSync(origDir)) fs.rmSync(origDir, { recursive: true, force: true });
+  deletePassagesForDoc(id);
   return true;
 }
 
@@ -108,4 +127,4 @@ export function backlinksFor(id) {
   return listDocs().filter(d => d.id !== id && d.wikiLinks.includes(id));
 }
 
-export { htmlToText, IMAGES_DIR, DOCS_DIR };
+export { htmlToText, IMAGES_DIR, DOCS_DIR, ORIGINALS_DIR };

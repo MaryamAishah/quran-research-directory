@@ -61,7 +61,7 @@ function splitIntoChunks(html) {
   return chunks.filter(c => c.length >= 3);
 }
 
-async function embed(text) {
+export async function embed(text) {
   const extractor = await getExtractor();
   const output = await extractor(text, { pooling: 'mean', normalize: true });
   return Array.from(output.data);
@@ -88,7 +88,7 @@ export function removeDocFromIndex(docId) {
   persistIndex();
 }
 
-function cosineSim(a, b) {
+export function cosineSim(a, b) {
   let sum = 0;
   for (let i = 0; i < a.length; i++) sum += a[i] * b[i];
   return sum; // vectors are already normalized

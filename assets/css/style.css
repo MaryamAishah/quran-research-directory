@@ -114,7 +114,8 @@ a { color: inherit; text-decoration: none; }
 .top-nav a:hover { color: var(--text); background: var(--bg-card); }
 body.no-backend .top-nav a[href="#/library"],
 body.no-backend .top-nav a[href="#/search"],
-body.no-backend .top-nav a[href="#/export"] { display: none; }
+body.no-backend .top-nav a[href="#/export"],
+body.no-backend .top-nav a[href="#/review"] { display: none; }
 
 .topbar-spacer { flex: 1; }
 
@@ -781,6 +782,88 @@ body.no-backend .top-nav a[href="#/export"] { display: none; }
   font-size: 13px;
   color: var(--text-muted);
 }
+
+/* ---------- Matched passages (reader + doc view) ---------- */
+.passage-item {
+  align-items: flex-start;
+  gap: 14px;
+}
+.passage-item-main { flex: 1; min-width: 0; }
+.passage-snippet {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  line-height: 1.55;
+  margin: 4px 0 6px;
+}
+.passage-location {
+  font-size: 11px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.match-badge { flex: none; white-space: nowrap; }
+.match-badge.explicit { color: var(--medinan); border-color: color-mix(in srgb, var(--medinan) 40%, var(--border)); }
+.match-badge.manual { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+.match-badge.llm { color: var(--meccan); border-color: color-mix(in srgb, var(--meccan) 40%, var(--border)); }
+
+/* ---------- Doc view: processing status + source passages ---------- */
+.processing-badge.processing { color: var(--medinan); border-color: color-mix(in srgb, var(--medinan) 40%, var(--border)); }
+.processing-badge.needs-review { color: var(--meccan); border-color: color-mix(in srgb, var(--meccan) 40%, var(--border)); }
+.processing-badge.error { color: var(--danger-text); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.processing-error-msg {
+  text-align: left;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  color: var(--danger-text);
+  background: var(--danger-soft);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.original-file-link {
+  display: inline-block;
+  font-size: 13px;
+  color: var(--accent);
+  margin-bottom: 14px;
+}
+.original-file-link:hover { text-decoration: underline; }
+.passage-source-list { display: flex; flex-direction: column; gap: 12px; }
+.passage-source-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.passage-source-item .passage-snippet { margin-top: 0; }
+
+/* ---------- Review queue ---------- */
+.review-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+.review-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.review-card-header a { color: var(--accent); font-weight: 600; font-size: 14px; }
+.review-card .passage-snippet { font-size: 14.5px; color: var(--text); margin-bottom: 14px; }
+.review-candidates { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.review-candidate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.review-confidence { font-size: 12px; color: var(--text-faint); flex: 1; }
+.manual-picker-mount { margin: 10px 0; }
 
 @media (max-width: 640px) {
   .container { padding: 16px; }

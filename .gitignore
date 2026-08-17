@@ -4,5 +4,6 @@ server/model-cache/
 *.log
 .DS_Store
 Thumbs.db
+.env
 
 .vercel

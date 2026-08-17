@@ -43,13 +43,18 @@ export async function docxToHtml(buffer, docId) {
 
 // PDF -> plain text (PDFs have no reliable semantic structure to recover, and
 // text extracted from RTL/shaped scripts like Arabic can come out garbled -
-// this covers general research documents, not Quranic text).
+// this covers general research documents, not Quranic text). Each page's
+// paragraphs are tagged with data-page so the passage pipeline can recover
+// page numbers for source traceability.
 export async function pdfToHtml(buffer) {
   const parser = new PDFParse({ data: buffer });
   try {
     const result = await parser.getText();
-    const blocks = result.text.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
-    return blocks.map(b => `<p>${escapeHtml(b).replace(/\n/g, '<br>')}</p>`).join('\n');
+    const pageHtml = result.pages.map(({ num, text }) => {
+      const blocks = text.split(/\n{2,}/).map(b => b.trim()).filter(Boolean);
+      return blocks.map(b => `<p data-page="${num}">${escapeHtml(b).replace(/\n/g, '<br>')}</p>`).join('\n');
+    });
+    return pageHtml.join('\n');
   } finally {
     await parser.destroy();
   }

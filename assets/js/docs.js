@@ -14,11 +14,25 @@ function formatDate(ts) {
 }
 
 // ---------- Document view ----------
+function processingBadgeHtml(processing) {
+  if (!processing || processing.status === 'none') return '';
+  const map = {
+    processing: ['Processing…', 'processing'],
+    'needs-review': ['Needs review', 'needs-review'],
+    complete: ['Processed', 'complete'],
+    error: ['Processing error', 'error'],
+  };
+  const [label, cls] = map[processing.status] || [processing.status, ''];
+  return `<span class="badge processing-badge ${cls}">${label}</span>`;
+}
+
 async function renderDocView(id) {
   document.getElementById('search-box').style.display = 'none';
   const doc = await API.getDoc(id);
   if (!doc) { navigate('#/library'); return; }
   const backlinks = await API.backlinks(id);
+  const hasPipeline = doc.processing !== undefined;
+  const passages = hasPipeline ? await API.docPassages(id) : [];
 
   app.innerHTML = `
     <div class="container">
@@ -28,13 +42,45 @@ async function renderDocView(id) {
           <div class="page-title" style="margin:0;">${escapeHtml(doc.title)}</div>
           <div class="reader-title-en">Updated ${formatDate(doc.updatedAt)}</div>
         </div>
+        ${processingBadgeHtml(doc.processing)}
+        ${doc.processing?.status === 'error' ? '<button class="nav-btn" id="doc-retry-btn">Retry processing</button>' : ''}
         <button class="nav-btn" id="doc-edit-btn">Edit</button>
         <button class="nav-btn danger" id="doc-delete-btn">Delete</button>
       </div>
 
       <div class="chip-row">${ayahChipsHtml(doc.linkedAyat)}</div>
 
+      ${doc.processing?.status === 'error' ? `<div class="empty-state processing-error-msg">${escapeHtml(doc.processing.error || 'Processing failed.')}</div>` : ''}
+
+      ${doc.sourceFile ? `
+        <a class="original-file-link" href="/originals/${doc.id}/${encodeURIComponent(doc.sourceFile.storedName)}" target="_blank" rel="noopener">
+          Download original file: ${escapeHtml(doc.sourceFile.originalName)}
+        </a>
+      ` : ''}
+
       <div class="doc-content ql-editor">${doc.html || '<p class="empty-state">Empty document.</p>'}</div>
+
+      ${hasPipeline ? `
+      <div class="notes-panel" style="margin-top:20px;">
+        <div class="notes-label">Source Passages (${passages.length})</div>
+        ${passages.length ? `<div class="passage-source-list">${passages.map(p => {
+          const goodMatches = p.matches.filter(m => m.status === 'auto' || m.status === 'accepted');
+          const locBits = [];
+          if (p.location?.page) locBits.push(`p. ${p.location.page}`);
+          if (p.location?.section) locBits.push(p.location.section);
+          return `
+            <div class="passage-source-item">
+              <p class="passage-snippet">${escapeHtml(p.text.slice(0, 200))}${p.text.length > 200 ? '…' : ''}</p>
+              <div class="chip-row">
+                ${locBits.length ? `<span class="badge">${locBits.map(escapeHtml).join(' &middot; ')}</span>` : ''}
+                ${goodMatches.map(m => `<a class="badge ayah-chip" href="#/surah/${m.surah}/ayah/${m.ayah}">${m.surah}:${m.ayah}</a>`).join('')}
+                ${!goodMatches.length ? '<span class="badge">No ayah matched</span>' : ''}
+              </div>
+            </div>
+          `;
+        }).join('')}</div>` : '<div class="empty-state" style="padding:14px 0;">No passages extracted.</div>'}
+      </div>
+      ` : ''}
 
       <div class="notes-panel" style="margin-top:20px;">
         <div class="notes-label">Linked From (${backlinks.length})</div>
@@ -51,6 +97,27 @@ async function renderDocView(id) {
     await API.deleteDoc(id);
     navigate('#/library');
   });
+  const retryBtn = document.getElementById('doc-retry-btn');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', async () => {
+      retryBtn.disabled = true;
+      retryBtn.textContent = 'Retrying…';
+      try {
+        await API.processDoc(id);
+      } catch { /* surfaced via re-render below */ }
+      renderDocView(id);
+    });
+  }
+
+  if (doc.processing?.status === 'processing') {
+    const poll = setInterval(async () => {
+      const fresh = await API.getDoc(id);
+      if (!fresh || fresh.processing?.status !== 'processing') {
+        clearInterval(poll);
+        if (window.location.hash === `#/doc/${id}`) renderDocView(id);
+      }
+    }, 2000);
+  }
 }
 
 // ---------- Library ----------
@@ -264,6 +331,101 @@ async function renderExportPage() {
     } finally {
       btn.disabled = false;
     }
+  });
+}
+
+// ---------- Review queue ----------
+async function renderReviewPage() {
+  document.getElementById('search-box').style.display = 'none';
+
+  app.innerHTML = `
+    <div class="container">
+      <div class="page-title">Review Queue</div>
+      <div class="page-subtitle">Uncertain ayah matches found by the document pipeline, waiting on your confirmation.</div>
+      <div id="review-list"></div>
+    </div>
+  `;
+
+  await loadReviewQueue();
+}
+
+async function loadReviewQueue() {
+  const listEl = document.getElementById('review-list');
+  if (!listEl) return;
+  const items = await API.reviewQueue();
+  if (!items.length) {
+    listEl.innerHTML = '<div class="empty-state">Nothing needs review right now.</div>';
+    return;
+  }
+
+  listEl.innerHTML = items.map(({ passage, doc }) => {
+    const locBits = [];
+    if (passage.location?.page) locBits.push(`p. ${passage.location.page}`);
+    if (passage.location?.section) locBits.push(passage.location.section);
+    const candidates = passage.matches
+      .map((m, idx) => ({ ...m, idx }))
+      .filter(m => m.status === 'pending-review');
+
+    return `
+      <div class="review-card" data-passage-id="${passage.id}">
+        <div class="review-card-header">
+          <a href="#/doc/${doc.id}">${escapeHtml(doc.title)}</a>
+          ${locBits.length ? `<span class="passage-location">${locBits.map(escapeHtml).join(' &middot; ')}</span>` : ''}
+        </div>
+        <p class="passage-snippet">${escapeHtml(passage.text.slice(0, 400))}${passage.text.length > 400 ? '…' : ''}</p>
+        <div class="review-candidates">
+          ${candidates.map(c => `
+            <div class="review-candidate">
+              <a class="badge ayah-chip" href="#/surah/${c.surah}/ayah/${c.ayah}">${c.surah}:${c.ayah}</a>
+              <span class="review-confidence">${Math.round(c.confidence * 100)}% confidence</span>
+              <button class="nav-btn" data-action="accept" data-idx="${c.idx}">Accept</button>
+              <button class="nav-btn danger" data-action="reject" data-idx="${c.idx}">Reject</button>
+            </div>
+          `).join('')}
+        </div>
+        <button class="nav-btn" data-action="toggle-manual">+ Add / change ayaat manually</button>
+        <div class="manual-picker-mount" style="display:none;"></div>
+        <button class="nav-btn primary" data-action="save-manual" style="display:none;">Save</button>
+      </div>
+    `;
+  }).join('');
+
+  listEl.querySelectorAll('.review-card').forEach(card => {
+    const passageId = card.dataset.passageId;
+
+    card.querySelectorAll('[data-action="accept"], [data-action="reject"]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        await API.reviewPassage(passageId, { action: btn.dataset.action, matchIndex: parseInt(btn.dataset.idx, 10) });
+        loadReviewQueue();
+      });
+    });
+
+    const toggleBtn = card.querySelector('[data-action="toggle-manual"]');
+    const pickerMount = card.querySelector('.manual-picker-mount');
+    const saveBtn = card.querySelector('[data-action="save-manual"]');
+    let picker = null;
+
+    toggleBtn.addEventListener('click', () => {
+      const showing = pickerMount.style.display !== 'none';
+      if (showing) {
+        pickerMount.style.display = 'none';
+        saveBtn.style.display = 'none';
+        return;
+      }
+      pickerMount.style.display = '';
+      saveBtn.style.display = '';
+      if (!picker) picker = createAyahPicker(pickerMount, [], { hideGeneralOption: true });
+    });
+
+    saveBtn.addEventListener('click', async () => {
+      if (!picker) return;
+      const matches = picker.getAyat();
+      if (!matches.length) return;
+      saveBtn.disabled = true;
+      await API.reviewPassage(passageId, { action: 'set', matches });
+      loadReviewQueue();
+    });
   });
 }
 
