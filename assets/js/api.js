@@ -52,6 +52,18 @@ const API = {
     });
     return r.json();
   },
+  async uploadDoc({ file, title, linkedAyat }) {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('title', title || '');
+    fd.append('linkedAyat', JSON.stringify(linkedAyat || []));
+    const r = await fetch('/api/docs/upload', { method: 'POST', body: fd });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || 'Upload failed');
+    }
+    return r.json();
+  },
   async exportDocs(ayat, format) {
     const r = await fetch('/api/export', {
       method: 'POST',

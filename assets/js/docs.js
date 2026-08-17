@@ -68,6 +68,7 @@ async function renderLibrary(filter) {
           <div class="page-title" style="margin:0;">Document Library</div>
           <div class="reader-title-en">${all.length} document${all.length === 1 ? '' : 's'}</div>
         </div>
+        <button class="nav-btn" id="lib-upload-btn">Upload File</button>
         <button class="nav-btn primary" id="lib-new-btn">+ New Document</button>
       </div>
 
@@ -86,6 +87,7 @@ async function renderLibrary(filter) {
   `;
 
   document.getElementById('lib-new-btn').addEventListener('click', () => navigate('#/doc/new'));
+  document.getElementById('lib-upload-btn').addEventListener('click', () => navigate('#/doc/upload'));
   document.getElementById('lib-search').addEventListener('input', (e) => renderLibrary(e.target.value));
   app.querySelectorAll('.doc-list-item').forEach(el => {
     el.addEventListener('click', (e) => {
@@ -141,6 +143,78 @@ async function renderSearchPage(initialQuery) {
   if (initialQuery) {
     document.getElementById('search-form').dispatchEvent(new Event('submit'));
   }
+}
+
+// ---------- Upload PDF/DOCX/TXT as a document ----------
+async function renderUploadPage() {
+  document.getElementById('search-box').style.display = 'none';
+
+  app.innerHTML = `
+    <div class="container editor-container">
+      <div class="reader-header">
+        <a href="#/library" class="back-link">&larr; Cancel</a>
+        <div class="reader-titleblock">
+          <div class="page-title" style="margin:0;">Upload Document</div>
+        </div>
+      </div>
+      <div class="page-subtitle">Upload a PDF, Word (.docx), or text file to import it as a research document. Its content becomes a normal, editable document you can refine, link, and search afterward.</div>
+
+      <div class="editor-section-label">File</div>
+      <label class="upload-dropzone" id="upload-dropzone" for="upload-file-input">
+        <input type="file" id="upload-file-input" accept=".pdf,.docx,.txt" hidden />
+        <span id="upload-file-name">Click to choose a PDF, DOCX, or TXT file&hellip;</span>
+      </label>
+
+      <div class="editor-section-label">Title</div>
+      <input class="title-input" id="upload-title" type="text" placeholder="Defaults to the filename" />
+
+      <div class="editor-section-label">Linked Ayaat</div>
+      <div id="upload-ayah-picker-mount"></div>
+
+      <div class="export-actions">
+        <button class="nav-btn primary" id="upload-btn">Upload</button>
+        <span id="upload-status" class="export-status"></span>
+      </div>
+    </div>
+  `;
+
+  const picker = createAyahPicker(document.getElementById('upload-ayah-picker-mount'), []);
+
+  const fileInput = document.getElementById('upload-file-input');
+  const fileNameEl = document.getElementById('upload-file-name');
+  const titleInput = document.getElementById('upload-title');
+
+  fileInput.addEventListener('change', () => {
+    const f = fileInput.files[0];
+    if (!f) {
+      fileNameEl.textContent = 'Click to choose a PDF, DOCX, or TXT file…';
+      return;
+    }
+    fileNameEl.textContent = f.name;
+    if (!titleInput.value) titleInput.value = f.name.replace(/\.[^.]+$/, '');
+  });
+
+  document.getElementById('upload-btn').addEventListener('click', async () => {
+    const file = fileInput.files[0];
+    const statusEl = document.getElementById('upload-status');
+    if (!file) { statusEl.textContent = 'Choose a file first.'; return; }
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['pdf', 'docx', 'txt'].includes(ext)) {
+      statusEl.textContent = 'Only PDF, DOCX, or TXT files are supported.';
+      return;
+    }
+    const btn = document.getElementById('upload-btn');
+    btn.disabled = true;
+    statusEl.textContent = 'Uploading and converting…';
+    try {
+      const linkedAyat = picker.isGeneral() ? [] : picker.getAyat();
+      const doc = await API.uploadDoc({ file, title: titleInput.value.trim(), linkedAyat });
+      navigate(`#/doc/${doc.id}`);
+    } catch (e) {
+      statusEl.textContent = 'Upload failed: ' + e.message;
+      btn.disabled = false;
+    }
+  });
 }
 
 // ---------- Export ----------

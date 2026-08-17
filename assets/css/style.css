@@ -547,6 +547,22 @@ body.no-backend .top-nav a[href="#/export"] { display: none; }
 }
 .title-input:focus { border-color: var(--accent); }
 
+.upload-dropzone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 28px 16px;
+  cursor: pointer;
+  text-align: center;
+  font-size: 14px;
+  color: var(--text-muted);
+  transition: all 0.12s;
+}
+.upload-dropzone:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
 #quill-toolbar.ql-toolbar.ql-snow {
   background: var(--bg-elevated);
   border: 1px solid var(--border);

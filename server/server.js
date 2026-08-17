@@ -15,6 +15,7 @@ import { reindexDoc, removeDocFromIndex, semanticSearch, ensureModelWarm } from 
 import { buildExportHtml } from './lib/exportBuilder.js';
 import { htmlToPdf } from './lib/pdfExport.js';
 import { htmlToDocx } from './lib/docxExport.js';
+import { fileToHtml } from './lib/fileImport.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -100,6 +101,31 @@ app.post('/api/upload-image', upload.single('image'), (req, res) => {
   const filename = `${crypto.randomUUID()}${safeExt}`;
   fs.writeFileSync(path.join(dir, filename), req.file.buffer);
   res.json({ url: `/media/${docId}/${filename}` });
+});
+
+// ---------- Upload PDF/DOCX/TXT as a new document ----------
+app.post('/api/docs/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const ext = path.extname(req.file.originalname).toLowerCase();
+    if (!['.pdf', '.docx', '.txt'].includes(ext)) {
+      return res.status(400).json({ error: 'Unsupported file type. Use PDF, DOCX, or TXT.' });
+    }
+
+    let linkedAyat = [];
+    try { linkedAyat = JSON.parse(req.body.linkedAyat || '[]'); } catch { /* default to [] */ }
+
+    const id = crypto.randomUUID();
+    const html = await fileToHtml(req.file.buffer, req.file.originalname, id);
+    const title = (req.body.title || '').trim() || path.basename(req.file.originalname, ext);
+
+    const doc = createDoc({ id, title, html, linkedAyat });
+    reindexDoc(doc).catch(err => console.error('reindex failed', err));
+    res.json(doc);
+  } catch (err) {
+    console.error('doc upload failed', err);
+    res.status(500).json({ error: err.message || 'Upload failed' });
+  }
 });
 
 // ---------- Import pasted images (from external URL or base64 data URI) ----------

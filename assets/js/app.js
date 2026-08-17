@@ -43,6 +43,9 @@ function parseHash() {
     const ayah = parseInt(query.get('ayah'), 10);
     return { view: 'doc-new', prefillSurah: surah || null, prefillAyah: ayah || null };
   }
+  if (parts[0] === 'doc' && parts[1] === 'upload') {
+    return { view: 'doc-upload' };
+  }
   if (parts[0] === 'doc' && parts[1] && parts[2] === 'edit') {
     return { view: 'doc-edit', id: parts[1] };
   }
@@ -85,7 +88,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   render();
 });
 
-const BACKEND_ONLY_VIEWS = new Set(['doc-new', 'doc-edit', 'doc-view', 'library', 'search', 'export']);
+const BACKEND_ONLY_VIEWS = new Set(['doc-new', 'doc-edit', 'doc-view', 'doc-upload', 'library', 'search', 'export']);
 
 function render() {
   const route = parseHash();
@@ -105,6 +108,8 @@ function render() {
     renderEditor({ mode: 'new', prefillSurah: route.prefillSurah, prefillAyah: route.prefillAyah });
   } else if (route.view === 'doc-edit') {
     renderEditor({ mode: 'edit', id: route.id });
+  } else if (route.view === 'doc-upload') {
+    renderUploadPage();
   } else if (route.view === 'doc-view') {
     renderDocView(route.id);
   } else if (route.view === 'library') {
