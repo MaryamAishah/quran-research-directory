@@ -55,6 +55,9 @@ function parseHash() {
   if (parts[0] === 'search') {
     return { view: 'search' };
   }
+  if (parts[0] === 'export') {
+    return { view: 'export' };
+  }
   return { view: 'dashboard' };
 }
 
@@ -70,7 +73,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   render();
 });
 
-const BACKEND_ONLY_VIEWS = new Set(['doc-new', 'doc-edit', 'doc-view', 'library', 'search']);
+const BACKEND_ONLY_VIEWS = new Set(['doc-new', 'doc-edit', 'doc-view', 'library', 'search', 'export']);
 
 function render() {
   const route = parseHash();
@@ -96,6 +99,8 @@ function render() {
     renderLibrary();
   } else if (route.view === 'search') {
     renderSearchPage();
+  } else if (route.view === 'export') {
+    renderExportPage();
   } else {
     renderDashboard();
   }

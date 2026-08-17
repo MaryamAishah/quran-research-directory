@@ -142,3 +142,64 @@ async function renderSearchPage(initialQuery) {
     document.getElementById('search-form').dispatchEvent(new Event('submit'));
   }
 }
+
+// ---------- Export ----------
+async function renderExportPage() {
+  document.getElementById('search-box').style.display = 'none';
+
+  app.innerHTML = `
+    <div class="container editor-container">
+      <div class="page-title">Export Documents</div>
+      <div class="page-subtitle">Pick the ayaat you want to export. Every document linked to any of them is included, organized ayah by ayah &mdash; a document linked to more than one selected ayah appears under each.</div>
+
+      <div class="editor-section-label">Ayaat to include</div>
+      <div id="export-ayah-picker-mount"></div>
+
+      <div class="editor-section-label">Format</div>
+      <div class="export-format-row">
+        <label class="format-option"><input type="radio" name="export-format" value="pdf" checked /> PDF</label>
+        <label class="format-option"><input type="radio" name="export-format" value="docx" /> Word (.docx)</label>
+      </div>
+
+      <div class="export-actions">
+        <button class="nav-btn primary" id="export-btn">Export</button>
+        <span id="export-status" class="export-status"></span>
+      </div>
+    </div>
+  `;
+
+  const picker = createAyahPicker(document.getElementById('export-ayah-picker-mount'), [], { hideGeneralOption: true });
+
+  document.getElementById('export-btn').addEventListener('click', async () => {
+    const ayat = picker.getAyat();
+    const statusEl = document.getElementById('export-status');
+    if (!ayat.length) {
+      statusEl.textContent = 'Select at least one ayah first.';
+      return;
+    }
+    const format = document.querySelector('input[name="export-format"]:checked').value;
+    const btn = document.getElementById('export-btn');
+    btn.disabled = true;
+    statusEl.textContent = 'Generating export…';
+    try {
+      const blob = await API.exportDocs(ayat, format);
+      downloadBlob(blob, `quran-research-export.${format}`);
+      statusEl.textContent = 'Downloaded.';
+    } catch (e) {
+      statusEl.textContent = 'Export failed: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

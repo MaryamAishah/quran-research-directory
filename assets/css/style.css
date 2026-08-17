@@ -85,7 +85,8 @@ a { color: inherit; text-decoration: none; }
 }
 .top-nav a:hover { color: var(--text); background: var(--bg-card); }
 body.no-backend .top-nav a[href="#/library"],
-body.no-backend .top-nav a[href="#/search"] { display: none; }
+body.no-backend .top-nav a[href="#/search"],
+body.no-backend .top-nav a[href="#/export"] { display: none; }
 
 .topbar-spacer { flex: 1; }
 
@@ -687,6 +688,34 @@ body.no-backend .top-nav a[href="#/search"] { display: none; }
   font-style: italic;
   line-height: 1.6;
   margin: 6px 0 10px;
+}
+
+/* ---------- Export page ---------- */
+.export-format-row {
+  display: flex;
+  gap: 18px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+}
+.format-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--text);
+  cursor: pointer;
+}
+.export-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 20px;
+}
+.export-status {
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 @media (max-width: 640px) {

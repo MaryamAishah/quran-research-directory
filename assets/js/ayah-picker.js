@@ -1,6 +1,7 @@
 // Reusable ayah-linking widget: lets the user attach a doc to one or more
 // specific ayaat (individually or by range), or mark it general (no ayaat).
-function createAyahPicker(container, initialAyat = []) {
+function createAyahPicker(container, initialAyat = [], options = {}) {
+  const { hideGeneralOption = false } = options;
   let ayat = [...initialAyat]; // [{surah, ayah}]
 
   const surahOptions = QURAN_DATA.map(s =>
@@ -9,10 +10,12 @@ function createAyahPicker(container, initialAyat = []) {
 
   container.innerHTML = `
     <div class="ayah-picker">
+      ${hideGeneralOption ? '' : `
       <label class="general-toggle">
         <input type="checkbox" id="ap-general" />
         General document (not linked to specific ayaat)
       </label>
+      `}
       <div class="ap-form" id="ap-form">
         <select class="ap-select" id="ap-surah">${surahOptions}</select>
         <input class="ap-input" id="ap-start" type="number" min="1" placeholder="Ayah" title="Start ayah" />
@@ -24,7 +27,7 @@ function createAyahPicker(container, initialAyat = []) {
     </div>
   `;
 
-  const generalCb = container.querySelector('#ap-general');
+  const generalCb = container.querySelector('#ap-general'); // null when hideGeneralOption
   const form = container.querySelector('#ap-form');
   const chipsEl = container.querySelector('#ap-chips');
   const surahSel = container.querySelector('#ap-surah');
@@ -52,16 +55,18 @@ function createAyahPicker(container, initialAyat = []) {
   }
 
   function setGeneral(isGeneral) {
-    generalCb.checked = isGeneral;
+    if (generalCb) generalCb.checked = isGeneral;
     form.style.display = isGeneral ? 'none' : '';
     chipsEl.style.display = isGeneral ? 'none' : '';
   }
 
-  generalCb.addEventListener('change', () => {
-    if (generalCb.checked) ayat = [];
-    setGeneral(generalCb.checked);
-    renderChips();
-  });
+  if (generalCb) {
+    generalCb.addEventListener('change', () => {
+      if (generalCb.checked) ayat = [];
+      setGeneral(generalCb.checked);
+      renderChips();
+    });
+  }
 
   container.querySelector('#ap-add').addEventListener('click', () => {
     const surah = parseInt(surahSel.value, 10);
@@ -87,7 +92,7 @@ function createAyahPicker(container, initialAyat = []) {
 
   return {
     getAyat: () => [...ayat],
-    isGeneral: () => generalCb.checked,
+    isGeneral: () => !!(generalCb && generalCb.checked),
     setInitial(list) {
       ayat = [...list];
       setGeneral(false);

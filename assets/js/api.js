@@ -52,4 +52,16 @@ const API = {
     });
     return r.json();
   },
+  async exportDocs(ayat, format) {
+    const r = await fetch('/api/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ayat, format }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || 'Export failed');
+    }
+    return r.blob();
+  },
 };

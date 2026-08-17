@@ -12,6 +12,9 @@ import {
   docsForAyah, backlinksFor, IMAGES_DIR,
 } from './lib/docStore.js';
 import { reindexDoc, removeDocFromIndex, semanticSearch, ensureModelWarm } from './lib/search.js';
+import { buildExportHtml } from './lib/exportBuilder.js';
+import { htmlToPdf } from './lib/pdfExport.js';
+import { htmlToDocx } from './lib/docxExport.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -135,6 +138,32 @@ app.post('/api/import-image', async (req, res) => {
   } catch (err) {
     console.error('import-image failed', err.message);
     res.status(500).json({ error: 'Import failed' });
+  }
+});
+
+// ---------- Export selected ayaat + linked documents ----------
+app.post('/api/export', async (req, res) => {
+  try {
+    const { ayat, format } = req.body;
+    if (!Array.isArray(ayat) || !ayat.length) {
+      return res.status(400).json({ error: 'No ayaat selected' });
+    }
+    const html = buildExportHtml(ayat);
+
+    if (format === 'docx') {
+      const buffer = await htmlToDocx(html);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', 'attachment; filename="quran-research-export.docx"');
+      return res.send(buffer);
+    }
+
+    const buffer = await htmlToPdf(html);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'attachment; filename="quran-research-export.pdf"');
+    res.send(buffer);
+  } catch (err) {
+    console.error('export failed', err);
+    res.status(500).json({ error: err.message || 'Export failed' });
   }
 });
 
