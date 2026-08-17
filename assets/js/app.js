@@ -65,10 +65,22 @@ function navigate(hash) {
   window.location.hash = hash;
 }
 
+// ---------- Theme toggle ----------
+function initThemeToggle() {
+  const btn = document.getElementById('theme-toggle');
+  btn.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    const next = current === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('qrd-theme', next);
+  });
+}
+
 window.addEventListener('hashchange', render);
 window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('brand').addEventListener('click', () => navigate('#/'));
   document.getElementById('search-box').addEventListener('input', onSearch);
+  initThemeToggle();
   await detectBackend();
   render();
 });
