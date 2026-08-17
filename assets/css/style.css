@@ -1,0 +1,700 @@
+@font-face {
+  font-family: 'AmiriQuran';
+  src: url('../fonts/AmiriQuran.ttf') format('truetype');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Amiri';
+  src: url('../fonts/Amiri-Regular.ttf') format('truetype');
+  font-display: swap;
+}
+
+:root {
+  --bg: #1e1e21;
+  --bg-elevated: #26262b;
+  --bg-card: #2a2a30;
+  --bg-card-hover: #323239;
+  --border: #3a3a42;
+  --text: #dcdce4;
+  --text-muted: #9797a3;
+  --text-faint: #6c6c78;
+  --accent: #9b7cf0;
+  --accent-hover: #ac91f4;
+  --accent-soft: rgba(155, 124, 240, 0.14);
+  --meccan: #c99b4e;
+  --medinan: #4ea1c9;
+  --radius: 10px;
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", "Inter", Roboto, sans-serif;
+  min-height: 100vh;
+}
+
+a { color: inherit; text-decoration: none; }
+
+::selection { background: var(--accent-soft); }
+
+/* ---------- Top bar ---------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 28px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.brand .brand-ar {
+  font-family: 'Amiri', serif;
+  font-size: 20px;
+  color: var(--accent);
+}
+
+.top-nav {
+  display: flex;
+  gap: 4px;
+}
+.top-nav a {
+  font-size: 13.5px;
+  color: var(--text-muted);
+  padding: 7px 12px;
+  border-radius: 7px;
+  transition: all 0.12s;
+}
+.top-nav a:hover { color: var(--text); background: var(--bg-card); }
+body.no-backend .top-nav a[href="#/library"],
+body.no-backend .top-nav a[href="#/search"] { display: none; }
+
+.topbar-spacer { flex: 1; }
+
+.search-box {
+  width: 280px;
+  max-width: 40vw;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: var(--text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.search-box:focus { border-color: var(--accent); }
+.search-box::placeholder { color: var(--text-faint); }
+
+/* ---------- Layout ---------- */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px;
+}
+
+.page-title {
+  font-size: 22px;
+  font-weight: 650;
+  margin: 4px 0 4px;
+}
+.page-subtitle {
+  color: var(--text-muted);
+  font-size: 14px;
+  margin: 0 0 24px;
+}
+
+/* ---------- Dashboard grid ---------- */
+.surah-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.surah-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.surah-card:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.surah-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.surah-num {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.surah-name-ar {
+  font-family: 'Amiri', serif;
+  font-size: 24px;
+  color: var(--text);
+  direction: rtl;
+  text-align: right;
+  line-height: 1.4;
+}
+
+.surah-card-names {
+  display: flex;
+  flex-direction: column;
+}
+
+.surah-name-en {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+.surah-name-translation {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.surah-card-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+
+.badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+.badge.meccan { color: var(--meccan); border-color: color-mix(in srgb, var(--meccan) 40%, var(--border)); }
+.badge.medinan { color: var(--medinan); border-color: color-mix(in srgb, var(--medinan) 40%, var(--border)); }
+
+.empty-state {
+  color: var(--text-faint);
+  text-align: center;
+  padding: 60px 0;
+  font-size: 14px;
+}
+
+/* ---------- Reader ---------- */
+.reader-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.back-link {
+  color: var(--text-muted);
+  font-size: 13px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.back-link:hover { color: var(--text); border-color: var(--accent); }
+
+.reader-titleblock { flex: 1; min-width: 200px; }
+.reader-title-ar {
+  font-family: 'Amiri', serif;
+  font-size: 26px;
+  direction: rtl;
+}
+.reader-title-en {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.reader-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.nav-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.12s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.nav-btn:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.ayah-select {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  outline: none;
+  cursor: pointer;
+}
+.ayah-select:focus { border-color: var(--accent); }
+
+.controls-spacer { flex: 1; }
+
+.ayah-progress {
+  font-size: 12.5px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.jump-form {
+  display: flex;
+  gap: 6px;
+}
+.jump-input {
+  width: 60px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 14px;
+  outline: none;
+}
+.jump-input:focus { border-color: var(--accent); }
+
+/* Ayah display */
+.ayah-panel {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 36px 32px;
+  margin-bottom: 18px;
+  position: relative;
+}
+
+.ayah-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.ayah-number-badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 4px 11px;
+  border-radius: 20px;
+}
+
+.sajda-badge {
+  font-size: 11.5px;
+  color: var(--meccan);
+  border: 1px solid color-mix(in srgb, var(--meccan) 40%, var(--border));
+  padding: 3px 9px;
+  border-radius: 20px;
+}
+
+.ayah-arabic {
+  font-family: 'AmiriQuran', 'Amiri', serif;
+  font-size: 34px;
+  line-height: 2.2;
+  direction: rtl;
+  text-align: right;
+  color: var(--text);
+  margin-bottom: 26px;
+}
+
+.ayah-translation {
+  font-size: 16px;
+  line-height: 1.75;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
+.ayah-translation .label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin-bottom: 8px;
+}
+
+/* Notes */
+.notes-panel {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+}
+.notes-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.notes-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+}
+.notes-status {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.notes-status.show { opacity: 1; }
+
+.notes-textarea {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  padding: 12px 14px;
+  outline: none;
+}
+.notes-textarea:focus { border-color: var(--accent); }
+.notes-textarea::placeholder { color: var(--text-faint); }
+
+.reader-footer-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 18px;
+  gap: 10px;
+}
+.reader-footer-nav .nav-btn { padding: 10px 18px; }
+
+.nav-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #16101f;
+  font-weight: 600;
+}
+.nav-btn.primary:hover:not(:disabled) { background: var(--accent-hover); color: #16101f; }
+.nav-btn.danger {
+  border-color: color-mix(in srgb, #e05a5a 45%, var(--border));
+  color: #e08a8a;
+}
+.nav-btn.danger:hover:not(:disabled) { background: rgba(224, 90, 90, 0.12); border-color: #e05a5a; }
+
+/* ---------- Linked documents (reader) ---------- */
+.notes-panel .notes-label-row {
+  align-items: center;
+}
+.linked-docs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.linked-doc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  transition: all 0.12s;
+}
+.linked-doc-item:hover { border-color: var(--accent); background: var(--bg-card-hover); }
+.linked-doc-title { font-size: 14px; color: var(--text); font-weight: 500; }
+.linked-doc-date { font-size: 11.5px; color: var(--text-faint); white-space: nowrap; }
+
+/* ---------- Ayah chips (used in doc cards / views) ---------- */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0;
+}
+.ayah-chip {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+.ayah-chip:hover { background: var(--accent-soft); }
+.score-badge { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
+
+/* ---------- Editor page ---------- */
+.editor-container { max-width: 900px; }
+.editor-section-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  margin: 22px 0 8px;
+}
+.title-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--border);
+  color: var(--text);
+  font-size: 26px;
+  font-weight: 650;
+  padding: 8px 2px 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.title-input:focus { border-color: var(--accent); }
+
+#quill-toolbar.ql-toolbar.ql-snow {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+#quill-editor {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  min-height: 320px;
+  font-size: 15px;
+  color: var(--text);
+}
+.ql-snow .ql-picker { color: var(--text-muted); }
+.ql-snow .ql-stroke { stroke: var(--text-muted); }
+.ql-snow .ql-fill { fill: var(--text-muted); }
+.ql-snow .ql-picker-options { background: var(--bg-card); border: 1px solid var(--border) !important; }
+.ql-snow .ql-tooltip {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.ql-snow .ql-tooltip input[type=text] { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
+.ql-toolbar.ql-snow .ql-doclink {
+  width: auto;
+  font-size: 12.5px;
+  padding: 0 8px;
+  color: var(--text-muted);
+}
+.ql-toolbar.ql-snow .ql-doclink:hover { color: var(--accent); }
+.ql-editor { min-height: 320px; }
+.ql-editor.ql-blank::before { color: var(--text-faint); font-style: normal; }
+
+/* ---------- Doc-link popover ---------- */
+.doclink-popover {
+  position: absolute;
+  z-index: 100;
+  width: 260px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 10px;
+}
+.doclink-search {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 7px 10px;
+  font-size: 13px;
+  outline: none;
+  margin-bottom: 8px;
+}
+.doclink-results { max-height: 220px; overflow-y: auto; }
+.doclink-result {
+  padding: 7px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--text);
+}
+.doclink-result:hover { background: var(--accent-soft); color: var(--accent); }
+.doclink-empty { padding: 7px 8px; font-size: 12.5px; color: var(--text-faint); }
+
+/* ---------- Ayah picker widget ---------- */
+.ayah-picker {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.general-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+.ap-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.ap-select, .ap-input {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 13.5px;
+  outline: none;
+}
+.ap-select:focus, .ap-input:focus { border-color: var(--accent); }
+.ap-input { width: 90px; }
+.ap-to { font-size: 12.5px; color: var(--text-faint); }
+.ap-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ap-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12.5px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 20px;
+}
+.ap-chip-x {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.ap-empty { color: var(--text-faint); font-size: 12.5px; }
+
+/* ---------- Document view ---------- */
+.doc-content {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.doc-content img { max-width: 100%; border-radius: 6px; }
+.doc-content a { color: var(--accent); text-decoration: underline; }
+
+.backlink-list { display: flex; flex-direction: column; gap: 6px; }
+.backlink-item {
+  font-size: 14px;
+  color: var(--accent);
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+.backlink-item:hover { border-color: var(--accent); }
+
+/* ---------- Library ---------- */
+.doc-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+.doc-list-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.doc-list-item:hover { border-color: var(--accent); background: var(--bg-card-hover); }
+.doc-list-title { font-size: 15.5px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.doc-list-date { font-size: 12px; color: var(--text-faint); margin-top: 6px; }
+
+/* ---------- Search page ---------- */
+.search-form {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.search-results { display: flex; flex-direction: column; gap: 12px; }
+.search-result-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.search-result-item:hover { border-color: var(--accent); background: var(--bg-card-hover); }
+.search-snippet {
+  font-size: 14px;
+  color: var(--text-muted);
+  font-style: italic;
+  line-height: 1.6;
+  margin: 6px 0 10px;
+}
+
+@media (max-width: 640px) {
+  .container { padding: 16px; }
+  .ayah-panel { padding: 24px 18px; }
+  .ayah-arabic { font-size: 28px; line-height: 2; }
+  .topbar { padding: 12px 16px; }
+  .search-box { width: 160px; }
+  .top-nav { display: none; }
+  .doc-content { padding: 20px; }
+}
