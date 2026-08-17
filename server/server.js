@@ -53,23 +53,23 @@ app.get('/api/docs/:id/backlinks', (req, res) => {
 });
 
 app.post('/api/docs', async (req, res) => {
-  const { title, html, linkedAyat, id } = req.body;
-  const doc = createDoc({ title, html, linkedAyat, id });
+  const { title, html, linkedAyat, id, autoDetect } = req.body;
+  const doc = createDoc({ title, html, linkedAyat, id, autoDetect });
   reindexDoc(doc).catch(err => console.error('reindex failed', err));
-  processDocument(doc.id).catch(err => console.error('passage processing failed', err));
+  if (doc.autoDetect) {
+    processDocument(doc.id).catch(err => console.error('passage processing failed', err));
+  }
   res.json(doc);
 });
 
 app.put('/api/docs/:id', async (req, res) => {
-  const { title, html, linkedAyat } = req.body;
-  const existed = getDoc(req.params.id);
-  const doc = updateDoc(req.params.id, { title, html, linkedAyat });
+  const { title, html, linkedAyat, autoDetect } = req.body;
+  const doc = updateDoc(req.params.id, { title, html, linkedAyat, autoDetect });
   if (!doc) return res.status(404).json({ error: 'Not found' });
   reindexDoc(doc).catch(err => console.error('reindex failed', err));
-  // Only auto-(re)process documents that already opted into the pipeline
-  // (i.e. were created after this feature shipped) - pre-existing legacy
-  // documents are left untouched unless explicitly processed via the API.
-  if (existed.processing !== undefined) {
+  // Only processes when the document is (now) opted in - covers both new
+  // documents and pre-existing ones the user has explicitly turned on.
+  if (doc.autoDetect) {
     processDocument(doc.id).catch(err => console.error('passage processing failed', err));
   }
   res.json(doc);
@@ -193,6 +193,7 @@ app.post('/api/docs/upload', upload.single('file'), async (req, res) => {
 
     let linkedAyat = [];
     try { linkedAyat = JSON.parse(req.body.linkedAyat || '[]'); } catch { /* default to [] */ }
+    const autoDetect = req.body.autoDetect !== 'false';
 
     const id = crypto.randomUUID();
     const html = await fileToHtml(req.file.buffer, req.file.originalname, id);
@@ -211,9 +212,11 @@ app.post('/api/docs/upload', upload.single('file'), async (req, res) => {
       size: req.file.size,
     };
 
-    const doc = createDoc({ id, title, html, linkedAyat, sourceFile });
+    const doc = createDoc({ id, title, html, linkedAyat, sourceFile, autoDetect });
     reindexDoc(doc).catch(err => console.error('reindex failed', err));
-    processDocument(doc.id).catch(err => console.error('passage processing failed', err));
+    if (doc.autoDetect) {
+      processDocument(doc.id).catch(err => console.error('passage processing failed', err));
+    }
     res.json(doc);
   } catch (err) {
     console.error('doc upload failed', err);

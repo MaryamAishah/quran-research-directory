@@ -61,7 +61,7 @@ export function getDoc(id) {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 
-export function createDoc({ title, html, linkedAyat, id, sourceFile }) {
+export function createDoc({ title, html, linkedAyat, id, sourceFile, autoDetect }) {
   id = id && /^[a-f0-9-]{36}$/.test(id) ? id : crypto.randomUUID();
   const now = Date.now();
   const doc = {
@@ -71,6 +71,7 @@ export function createDoc({ title, html, linkedAyat, id, sourceFile }) {
     linkedAyat: Array.isArray(linkedAyat) ? linkedAyat : [],
     wikiLinks: extractWikiLinks(html || ''),
     sourceFile: sourceFile || null,
+    autoDetect: autoDetect !== false, // opt-out (defaults on for new documents)
     processing: { status: 'none', error: null, contentHash: null, updatedAt: now },
     createdAt: now,
     updatedAt: now,
@@ -79,7 +80,7 @@ export function createDoc({ title, html, linkedAyat, id, sourceFile }) {
   return doc;
 }
 
-export function updateDoc(id, { title, html, linkedAyat }) {
+export function updateDoc(id, { title, html, linkedAyat, autoDetect }) {
   const existing = getDoc(id);
   if (!existing) return null;
   const updated = {
@@ -87,6 +88,9 @@ export function updateDoc(id, { title, html, linkedAyat }) {
     title: title !== undefined ? title.trim() || 'Untitled document' : existing.title,
     html: html !== undefined ? html : existing.html,
     linkedAyat: linkedAyat !== undefined ? linkedAyat : existing.linkedAyat,
+    // Pre-existing documents (from before this feature) have no autoDetect
+    // field at all - treat that as opted-out until explicitly turned on.
+    autoDetect: autoDetect !== undefined ? autoDetect : (existing.autoDetect ?? false),
     updatedAt: Date.now(),
   };
   updated.wikiLinks = extractWikiLinks(updated.html);

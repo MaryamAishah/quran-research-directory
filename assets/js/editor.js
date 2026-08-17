@@ -29,6 +29,11 @@ async function renderEditor({ mode, id, prefillSurah, prefillAyah }) {
       <div class="editor-section-label">Linked Ayaat</div>
       <div id="ayah-picker-mount"></div>
 
+      <label class="general-toggle auto-detect-toggle">
+        <input type="checkbox" id="auto-detect-toggle" ${(doc ? (doc.autoDetect ?? false) : true) ? 'checked' : ''} />
+        Automatically detect ayah references in this document (splits it into passages and matches them to specific ayaat)
+      </label>
+
       <div class="editor-section-label">Content</div>
       <div id="quill-toolbar">
         <span class="ql-formats">
@@ -135,11 +140,12 @@ async function renderEditor({ mode, id, prefillSurah, prefillAyah }) {
     const title = document.getElementById('doc-title').value.trim() || 'Untitled document';
     const html = quill.root.innerHTML;
     const linkedAyat = picker.isGeneral() ? [] : picker.getAyat();
+    const autoDetect = document.getElementById('auto-detect-toggle').checked;
     let saved;
     if (isNew) {
-      saved = await API.createDoc({ id: draftId, title, html, linkedAyat });
+      saved = await API.createDoc({ id: draftId, title, html, linkedAyat, autoDetect });
     } else {
-      saved = await API.updateDoc(id, { title, html, linkedAyat });
+      saved = await API.updateDoc(id, { title, html, linkedAyat, autoDetect });
     }
     navigate(`#/doc/${saved.id}`);
   });

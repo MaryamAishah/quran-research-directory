@@ -10,19 +10,19 @@ const API = {
   async backlinks(id) {
     return (await fetch(`/api/docs/${id}/backlinks`)).json();
   },
-  async createDoc({ id, title, html, linkedAyat }) {
+  async createDoc({ id, title, html, linkedAyat, autoDetect }) {
     const r = await fetch('/api/docs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, title, html, linkedAyat }),
+      body: JSON.stringify({ id, title, html, linkedAyat, autoDetect }),
     });
     return r.json();
   },
-  async updateDoc(id, { title, html, linkedAyat }) {
+  async updateDoc(id, { title, html, linkedAyat, autoDetect }) {
     const r = await fetch(`/api/docs/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, html, linkedAyat }),
+      body: JSON.stringify({ title, html, linkedAyat, autoDetect }),
     });
     return r.json();
   },
@@ -52,11 +52,12 @@ const API = {
     });
     return r.json();
   },
-  async uploadDoc({ file, title, linkedAyat }) {
+  async uploadDoc({ file, title, linkedAyat, autoDetect }) {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('title', title || '');
     fd.append('linkedAyat', JSON.stringify(linkedAyat || []));
+    fd.append('autoDetect', autoDetect === false ? 'false' : 'true');
     const r = await fetch('/api/docs/upload', { method: 'POST', body: fd });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));

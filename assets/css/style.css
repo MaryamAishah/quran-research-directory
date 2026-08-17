@@ -648,6 +648,10 @@ body.no-backend .top-nav a[href="#/review"] { display: none; }
   margin-bottom: 12px;
   cursor: pointer;
 }
+.auto-detect-toggle {
+  margin: 14px 0 4px;
+  line-height: 1.4;
+}
 .ap-form {
   display: flex;
   align-items: center;

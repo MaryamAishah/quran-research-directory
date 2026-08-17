@@ -238,6 +238,11 @@ async function renderUploadPage() {
       <div class="editor-section-label">Linked Ayaat</div>
       <div id="upload-ayah-picker-mount"></div>
 
+      <label class="general-toggle auto-detect-toggle">
+        <input type="checkbox" id="upload-auto-detect-toggle" checked />
+        Automatically detect ayah references in this document (splits it into passages and matches them to specific ayaat)
+      </label>
+
       <div class="export-actions">
         <button class="nav-btn primary" id="upload-btn">Upload</button>
         <span id="upload-status" class="export-status"></span>
@@ -275,7 +280,8 @@ async function renderUploadPage() {
     statusEl.textContent = 'Uploading and converting…';
     try {
       const linkedAyat = picker.isGeneral() ? [] : picker.getAyat();
-      const doc = await API.uploadDoc({ file, title: titleInput.value.trim(), linkedAyat });
+      const autoDetect = document.getElementById('upload-auto-detect-toggle').checked;
+      const doc = await API.uploadDoc({ file, title: titleInput.value.trim(), linkedAyat, autoDetect });
       navigate(`#/doc/${doc.id}`);
     } catch (e) {
       statusEl.textContent = 'Upload failed: ' + e.message;
