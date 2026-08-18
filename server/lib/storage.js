@@ -79,12 +79,8 @@ export async function writeJson(key, obj) {
 export async function listJson(prefix) {
   if (R2_CONFIGURED) {
     const keys = await listKeys(prefix);
-    const results = [];
-    for (const key of keys) {
-      const obj = await readJson(key);
-      if (obj) results.push(obj);
-    }
-    return results;
+    const objects = await Promise.all(keys.map(key => readJson(key)));
+    return objects.filter(Boolean);
   }
   const dir = localPath(prefix);
   if (!fs.existsSync(dir)) return [];

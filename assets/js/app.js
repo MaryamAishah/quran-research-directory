@@ -18,7 +18,7 @@ let HAS_BACKEND = true;
 async function detectBackend() {
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 1500);
+    const timer = setTimeout(() => ctrl.abort(), 4000);
     const r = await fetch('/api/docs', { signal: ctrl.signal, cache: 'no-store' });
     clearTimeout(timer);
     if (r.status === 401) {
@@ -229,6 +229,18 @@ function renderReader(surah, ayahNum) {
         </div>
       </div>
 
+      ${HAS_BACKEND ? `
+      <div class="notes-panel">
+        <div class="notes-label-row">
+          <span class="notes-label">About ${surah.englishName} &middot; General</span>
+          <button class="nav-btn primary" id="add-surah-doc-btn">+ Add Document</button>
+        </div>
+        <div id="surah-docs-list" class="linked-docs-list">
+          <div class="empty-state" style="padding:14px 0;">Loading...</div>
+        </div>
+      </div>
+      ` : ''}
+
       <div class="reader-controls">
         <button class="nav-btn" id="prev-btn" ${atFirstAyah && !prevSurah ? 'disabled' : ''}>&larr; Prev</button>
         <select class="ayah-select" id="ayah-select">${options}</select>
@@ -317,8 +329,12 @@ function renderReader(surah, ayahNum) {
     document.getElementById('add-doc-btn').addEventListener('click', () => {
       navigate(`#/doc/new?surah=${surah.number}&ayah=${ayah.n}`);
     });
+    document.getElementById('add-surah-doc-btn').addEventListener('click', () => {
+      navigate(`#/doc/new?surah=${surah.number}`);
+    });
     loadLinkedDocs(surah.number, ayah.n);
     loadMatchedPassages(surah.number, ayah.n);
+    loadSurahDocs(surah.number);
   }
 
   // Keyboard navigation (ignore when typing in inputs)
@@ -328,6 +344,28 @@ function renderReader(surah, ayahNum) {
     if (e.key === 'ArrowLeft') goNext();   // Arabic RTL reading: left arrow = next ayah
     if (e.key === 'ArrowRight') goPrev();  // right arrow = previous ayah
   };
+}
+
+async function loadSurahDocs(surahNum) {
+  const listEl = document.getElementById('surah-docs-list');
+  if (!listEl) return;
+  let docs;
+  try {
+    docs = await API.docsForSurah(surahNum);
+  } catch {
+    listEl.innerHTML = '<div class="empty-state" style="padding:14px 0;">Can\'t reach the local server.</div>';
+    return;
+  }
+  if (!docs.length) {
+    listEl.innerHTML = '<div class="empty-state" style="padding:14px 0;">No general documents for this surah yet.</div>';
+    return;
+  }
+  listEl.innerHTML = docs.map(d => `
+    <a class="linked-doc-item" href="#/doc/${d.id}">
+      <span class="linked-doc-title">${escapeHtml(d.title)}</span>
+      <span class="linked-doc-date">Updated ${new Date(d.updatedAt).toLocaleDateString()}</span>
+    </a>
+  `).join('');
 }
 
 async function loadLinkedDocs(surahNum, ayahNum) {

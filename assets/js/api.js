@@ -10,19 +10,19 @@ const API = {
   async backlinks(id) {
     return (await fetch(`/api/docs/${id}/backlinks`)).json();
   },
-  async createDoc({ id, title, html, linkedAyat, autoDetect }) {
+  async createDoc({ id, title, html, linkedAyat, linkedSurahs, autoDetect }) {
     const r = await fetch('/api/docs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, title, html, linkedAyat, autoDetect }),
+      body: JSON.stringify({ id, title, html, linkedAyat, linkedSurahs, autoDetect }),
     });
     return r.json();
   },
-  async updateDoc(id, { title, html, linkedAyat, autoDetect }) {
+  async updateDoc(id, { title, html, linkedAyat, linkedSurahs, autoDetect }) {
     const r = await fetch(`/api/docs/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, html, linkedAyat, autoDetect }),
+      body: JSON.stringify({ title, html, linkedAyat, linkedSurahs, autoDetect }),
     });
     return r.json();
   },
@@ -32,6 +32,9 @@ const API = {
   },
   async docsForAyah(surah, ayah) {
     return (await fetch(`/api/ayah/${surah}/${ayah}/docs`)).json();
+  },
+  async docsForSurah(surah) {
+    return (await fetch(`/api/surah/${surah}/docs`)).json();
   },
   async search(q) {
     const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
@@ -52,11 +55,12 @@ const API = {
     });
     return r.json();
   },
-  async uploadDoc({ file, title, linkedAyat, autoDetect }) {
+  async uploadDoc({ file, title, linkedAyat, linkedSurahs, autoDetect }) {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('title', title || '');
     fd.append('linkedAyat', JSON.stringify(linkedAyat || []));
+    fd.append('linkedSurahs', JSON.stringify(linkedSurahs || []));
     fd.append('autoDetect', autoDetect === false ? 'false' : 'true');
     const r = await fetch('/api/docs/upload', { method: 'POST', body: fd });
     if (!r.ok) {

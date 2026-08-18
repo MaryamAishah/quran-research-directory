@@ -1,12 +1,18 @@
 // Document view, library browser, and semantic search pages.
 
-function ayahChipsHtml(linkedAyat) {
-  if (!linkedAyat || !linkedAyat.length) return '<span class="badge">General</span>';
-  return linkedAyat
-    .slice()
+function ayahChipsHtml(doc) {
+  const linkedAyat = doc?.linkedAyat || [];
+  const linkedSurahs = doc?.linkedSurahs || [];
+  if (!linkedAyat.length && !linkedSurahs.length) return '<span class="badge">General</span>';
+  const surahChips = [...linkedSurahs].sort((a, b) => a - b).map(s => {
+    const info = surahByNumber(s);
+    return `<a class="badge ayah-chip surah-chip" href="#/surah/${s}/ayah/1">${s}. ${info ? escapeHtml(info.englishName) : ''} (whole)</a>`;
+  }).join('');
+  const ayahChips = [...linkedAyat]
     .sort((a, b) => a.surah - b.surah || a.ayah - b.ayah)
     .map(a => `<a class="badge ayah-chip" href="#/surah/${a.surah}/ayah/${a.ayah}">${a.surah}:${a.ayah}</a>`)
     .join('');
+  return surahChips + ayahChips;
 }
 
 function formatDate(ts) {
@@ -48,7 +54,7 @@ async function renderDocView(id) {
         <button class="nav-btn danger" id="doc-delete-btn">Delete</button>
       </div>
 
-      <div class="chip-row">${ayahChipsHtml(doc.linkedAyat)}</div>
+      <div class="chip-row">${ayahChipsHtml(doc)}</div>
 
       ${doc.processing?.status === 'error' ? `<div class="empty-state processing-error-msg">${escapeHtml(doc.processing.error || 'Processing failed.')}</div>` : ''}
 
@@ -145,7 +151,7 @@ async function renderLibrary(filter) {
         ${docsFiltered.map(d => `
           <div class="doc-list-item" data-id="${d.id}">
             <div class="doc-list-title">${escapeHtml(d.title)}</div>
-            <div class="chip-row">${ayahChipsHtml(d.linkedAyat)}</div>
+            <div class="chip-row">${ayahChipsHtml(d)}</div>
             <div class="doc-list-date">Updated ${formatDate(d.updatedAt)}</div>
           </div>
         `).join('') || '<div class="empty-state">No documents yet. Create your first one.</div>'}
@@ -196,7 +202,7 @@ async function renderSearchPage(initialQuery) {
       <div class="search-result-item" data-id="${r.doc.id}">
         <div class="doc-list-title">${escapeHtml(r.doc.title)}</div>
         <div class="search-snippet">&ldquo;${escapeHtml(r.text)}&rdquo;</div>
-        <div class="chip-row">${ayahChipsHtml(r.doc.linkedAyat)} <span class="badge score-badge">${Math.round(r.score * 100)}% match</span></div>
+        <div class="chip-row">${ayahChipsHtml(r.doc)} <span class="badge score-badge">${Math.round(r.score * 100)}% match</span></div>
       </div>
     `).join('');
     resultsEl.querySelectorAll('.search-result-item').forEach(el => {
@@ -235,7 +241,7 @@ async function renderUploadPage() {
       <div class="editor-section-label">Title</div>
       <input class="title-input" id="upload-title" type="text" placeholder="Defaults to the filename" />
 
-      <div class="editor-section-label">Linked Ayaat</div>
+      <div class="editor-section-label">Linked Ayaat &amp; Surahs</div>
       <div id="upload-ayah-picker-mount"></div>
 
       <label class="general-toggle auto-detect-toggle">
@@ -280,8 +286,9 @@ async function renderUploadPage() {
     statusEl.textContent = 'Uploading and converting…';
     try {
       const linkedAyat = picker.isGeneral() ? [] : picker.getAyat();
+      const linkedSurahs = picker.isGeneral() ? [] : picker.getSurahs();
       const autoDetect = document.getElementById('upload-auto-detect-toggle').checked;
-      const doc = await API.uploadDoc({ file, title: titleInput.value.trim(), linkedAyat, autoDetect });
+      const doc = await API.uploadDoc({ file, title: titleInput.value.trim(), linkedAyat, linkedSurahs, autoDetect });
       navigate(`#/doc/${doc.id}`);
     } catch (e) {
       statusEl.textContent = 'Upload failed: ' + e.message;

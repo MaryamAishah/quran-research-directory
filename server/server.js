@@ -9,7 +9,7 @@ import http from 'http';
 
 import {
   listDocs, getDoc, createDoc, updateDoc, deleteDoc,
-  docsForAyah, backlinksFor, IMAGES_PREFIX, ORIGINALS_PREFIX,
+  docsForAyah, docsForSurah, backlinksFor, IMAGES_PREFIX, ORIGINALS_PREFIX,
 } from './lib/docStore.js';
 import { reindexDoc, removeDocFromIndex, semanticSearch, ensureModelWarm } from './lib/search.js';
 import { buildExportHtml } from './lib/exportBuilder.js';
@@ -114,8 +114,8 @@ app.get('/api/docs/:id/backlinks', async (req, res) => {
 });
 
 app.post('/api/docs', async (req, res) => {
-  const { title, html, linkedAyat, id, autoDetect } = req.body;
-  const doc = await createDoc({ title, html, linkedAyat, id, autoDetect });
+  const { title, html, linkedAyat, linkedSurahs, id, autoDetect } = req.body;
+  const doc = await createDoc({ title, html, linkedAyat, linkedSurahs, id, autoDetect });
   reindexDoc(doc).catch(err => console.error('reindex failed', err));
   if (doc.autoDetect) {
     processDocument(doc.id).catch(err => console.error('passage processing failed', err));
@@ -124,8 +124,8 @@ app.post('/api/docs', async (req, res) => {
 });
 
 app.put('/api/docs/:id', async (req, res) => {
-  const { title, html, linkedAyat, autoDetect } = req.body;
-  const doc = await updateDoc(req.params.id, { title, html, linkedAyat, autoDetect });
+  const { title, html, linkedAyat, linkedSurahs, autoDetect } = req.body;
+  const doc = await updateDoc(req.params.id, { title, html, linkedAyat, linkedSurahs, autoDetect });
   if (!doc) return res.status(404).json({ error: 'Not found' });
   reindexDoc(doc).catch(err => console.error('reindex failed', err));
   // Only processes when the document is (now) opted in - covers both new
@@ -147,6 +147,10 @@ app.get('/api/ayah/:surah/:ayah/docs', async (req, res) => {
   const surah = parseInt(req.params.surah, 10);
   const ayah = parseInt(req.params.ayah, 10);
   res.json(await docsForAyah(surah, ayah));
+});
+
+app.get('/api/surah/:surah/docs', async (req, res) => {
+  res.json(await docsForSurah(parseInt(req.params.surah, 10)));
 });
 
 // ---------- Passage-to-ayah matching pipeline ----------
@@ -252,6 +256,8 @@ app.post('/api/docs/upload', upload.single('file'), async (req, res) => {
 
     let linkedAyat = [];
     try { linkedAyat = JSON.parse(req.body.linkedAyat || '[]'); } catch { /* default to [] */ }
+    let linkedSurahs = [];
+    try { linkedSurahs = JSON.parse(req.body.linkedSurahs || '[]'); } catch { /* default to [] */ }
     const autoDetect = req.body.autoDetect !== 'false';
 
     const id = crypto.randomUUID();
@@ -269,7 +275,7 @@ app.post('/api/docs/upload', upload.single('file'), async (req, res) => {
       size: req.file.size,
     };
 
-    const doc = await createDoc({ id, title, html, linkedAyat, sourceFile, autoDetect });
+    const doc = await createDoc({ id, title, html, linkedAyat, linkedSurahs, sourceFile, autoDetect });
     reindexDoc(doc).catch(err => console.error('reindex failed', err));
     if (doc.autoDetect) {
       processDocument(doc.id).catch(err => console.error('passage processing failed', err));

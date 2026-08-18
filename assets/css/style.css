@@ -522,6 +522,10 @@ body.no-backend .top-nav a[href="#/review"] { display: none; }
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
 }
+.ayah-chip.surah-chip {
+  color: var(--medinan);
+  border-color: color-mix(in srgb, var(--medinan) 40%, var(--border));
+}
 .ayah-chip:hover { background: var(--accent-soft); }
 .score-badge { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
 
@@ -692,6 +696,20 @@ body.no-backend .top-nav a[href="#/review"] { display: none; }
   padding: 2px 4px;
 }
 .ap-empty { color: var(--text-faint); font-size: 12.5px; }
+.ap-chip-group { margin-top: 10px; }
+.ap-chip-group:first-of-type { margin-top: 0; }
+.ap-chip-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+  margin-bottom: 5px;
+}
+.ap-chip-surah {
+  background: color-mix(in srgb, var(--medinan) 16%, transparent);
+  color: var(--medinan);
+}
+.ap-chip-surah .ap-chip-x { color: var(--medinan); }
 
 /* ---------- Document view ---------- */
 .doc-content {

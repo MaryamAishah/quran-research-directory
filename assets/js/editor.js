@@ -26,7 +26,7 @@ async function renderEditor({ mode, id, prefillSurah, prefillAyah }) {
 
       <input class="title-input" id="doc-title" type="text" placeholder="Document title" value="${escapeAttr(doc?.title || '')}" />
 
-      <div class="editor-section-label">Linked Ayaat</div>
+      <div class="editor-section-label">Linked Ayaat &amp; Surahs</div>
       <div id="ayah-picker-mount"></div>
 
       <label class="general-toggle auto-detect-toggle">
@@ -75,8 +75,15 @@ async function renderEditor({ mode, id, prefillSurah, prefillAyah }) {
   `;
 
   const pickerMount = document.getElementById('ayah-picker-mount');
-  const picker = createAyahPicker(pickerMount, doc?.linkedAyat || (prefillSurah ? [{ surah: prefillSurah, ayah: prefillAyah }] : []));
-  if (isNew && prefillSurah) picker.setInitial([{ surah: prefillSurah, ayah: prefillAyah }]);
+  let initialAyat = doc?.linkedAyat || [];
+  let initialSurahs = doc?.linkedSurahs || [];
+  if (isNew && prefillSurah) {
+    // A specific ayah was given -> prefill that ayah; otherwise (surah only,
+    // e.g. from a "Surah overview" page) prefill the whole surah instead.
+    if (prefillAyah) initialAyat = [{ surah: prefillSurah, ayah: prefillAyah }];
+    else initialSurahs = [prefillSurah];
+  }
+  const picker = createAyahPicker(pickerMount, initialAyat, { initialSurahs });
 
   const quill = new Quill('#quill-editor', {
     theme: 'snow',
@@ -119,18 +126,10 @@ async function renderEditor({ mode, id, prefillSurah, prefillAyah }) {
     }, 150);
   });
 
-  // ---- Link-to-document button ----
-  const allDocs = await API.listDocs();
-  const docLinkBtn = document.querySelector('.ql-doclink');
-  docLinkBtn.addEventListener('click', () => {
-    const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
-    openDocLinkPopover(docLinkBtn, allDocs.filter(d => d.id !== draftId), (picked) => {
-      quill.clipboard.dangerouslyPasteHTML(range.index, `<a href="#/doc/${picked.id}">${escapeHtml(picked.title)}</a>&nbsp;`, 'user');
-      quill.setSelection(range.index + picked.title.length + 1, 0, 'silent');
-    });
-  });
-
   // ---- Save / Cancel / Delete ----
+  // Wired up immediately (no await before this point) so the button is
+  // never visibly-ready-but-inert while something unrelated is still
+  // loading in the background.
   document.getElementById('editor-cancel').addEventListener('click', (e) => {
     e.preventDefault();
     history.back();
@@ -140,12 +139,13 @@ async function renderEditor({ mode, id, prefillSurah, prefillAyah }) {
     const title = document.getElementById('doc-title').value.trim() || 'Untitled document';
     const html = quill.root.innerHTML;
     const linkedAyat = picker.isGeneral() ? [] : picker.getAyat();
+    const linkedSurahs = picker.isGeneral() ? [] : picker.getSurahs();
     const autoDetect = document.getElementById('auto-detect-toggle').checked;
     let saved;
     if (isNew) {
-      saved = await API.createDoc({ id: draftId, title, html, linkedAyat, autoDetect });
+      saved = await API.createDoc({ id: draftId, title, html, linkedAyat, linkedSurahs, autoDetect });
     } else {
-      saved = await API.updateDoc(id, { title, html, linkedAyat, autoDetect });
+      saved = await API.updateDoc(id, { title, html, linkedAyat, linkedSurahs, autoDetect });
     }
     navigate(`#/doc/${saved.id}`);
   });
@@ -157,6 +157,20 @@ async function renderEditor({ mode, id, prefillSurah, prefillAyah }) {
       navigate('#/library');
     });
   }
+
+  // ---- Link-to-document button ---- (doc list fetched lazily, on first
+  // use, rather than blocking editor setup for a feature that may not
+  // even get used this session)
+  let allDocsCache = null;
+  const docLinkBtn = document.querySelector('.ql-doclink');
+  docLinkBtn.addEventListener('click', async () => {
+    if (!allDocsCache) allDocsCache = await API.listDocs();
+    const range = quill.getSelection(true) || { index: quill.getLength(), length: 0 };
+    openDocLinkPopover(docLinkBtn, allDocsCache.filter(d => d.id !== draftId), (picked) => {
+      quill.clipboard.dangerouslyPasteHTML(range.index, `<a href="#/doc/${picked.id}">${escapeHtml(picked.title)}</a>&nbsp;`, 'user');
+      quill.setSelection(range.index + picked.title.length + 1, 0, 'silent');
+    });
+  });
 }
 
 function openDocLinkPopover(anchorEl, docs, onPick) {

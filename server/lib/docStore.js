@@ -49,7 +49,7 @@ export async function getDoc(id) {
   return storage.readJson(docKey(id));
 }
 
-export async function createDoc({ title, html, linkedAyat, id, sourceFile, autoDetect }) {
+export async function createDoc({ title, html, linkedAyat, linkedSurahs, id, sourceFile, autoDetect }) {
   id = id && /^[a-f0-9-]{36}$/.test(id) ? id : crypto.randomUUID();
   const now = Date.now();
   const doc = {
@@ -57,6 +57,7 @@ export async function createDoc({ title, html, linkedAyat, id, sourceFile, autoD
     title: (title || 'Untitled document').trim(),
     html: html || '',
     linkedAyat: Array.isArray(linkedAyat) ? linkedAyat : [],
+    linkedSurahs: Array.isArray(linkedSurahs) ? linkedSurahs : [],
     wikiLinks: extractWikiLinks(html || ''),
     sourceFile: sourceFile || null,
     autoDetect: autoDetect !== false, // opt-out (defaults on for new documents)
@@ -68,7 +69,7 @@ export async function createDoc({ title, html, linkedAyat, id, sourceFile, autoD
   return doc;
 }
 
-export async function updateDoc(id, { title, html, linkedAyat, autoDetect }) {
+export async function updateDoc(id, { title, html, linkedAyat, linkedSurahs, autoDetect }) {
   const existing = await getDoc(id);
   if (!existing) return null;
   const updated = {
@@ -76,6 +77,7 @@ export async function updateDoc(id, { title, html, linkedAyat, autoDetect }) {
     title: title !== undefined ? title.trim() || 'Untitled document' : existing.title,
     html: html !== undefined ? html : existing.html,
     linkedAyat: linkedAyat !== undefined ? linkedAyat : existing.linkedAyat,
+    linkedSurahs: linkedSurahs !== undefined ? linkedSurahs : (existing.linkedSurahs || []),
     // Pre-existing documents (from before this feature) have no autoDetect
     // field at all - treat that as opted-out until explicitly turned on.
     autoDetect: autoDetect !== undefined ? autoDetect : (existing.autoDetect ?? false),
@@ -109,6 +111,11 @@ export async function deleteDoc(id) {
 export async function docsForAyah(surah, ayah) {
   const docs = await listDocs();
   return docs.filter(d => d.linkedAyat.some(a => a.surah === surah && a.ayah === ayah));
+}
+
+export async function docsForSurah(surah) {
+  const docs = await listDocs();
+  return docs.filter(d => (d.linkedSurahs || []).includes(surah));
 }
 
 export async function backlinksFor(id) {
