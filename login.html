@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sign in — Quran Research Directory</title>
+<link rel="icon" type="image/png" href="assets/img/favicon.png" />
+<link rel="stylesheet" href="assets/css/style.css" />
+<script>
+  document.documentElement.setAttribute('data-theme', localStorage.getItem('qrd-theme') || 'dark');
+</script>
+<style>
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .login-card {
+    width: 380px;
+    max-width: calc(100vw - 32px);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    box-shadow: var(--shadow);
+  }
+  .login-title {
+    font-size: 17px;
+    font-weight: 650;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .login-title .brand-ar { font-family: 'Amiri', serif; color: var(--accent); font-size: 22px; }
+  .login-input {
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-size: 14px;
+    outline: none;
+  }
+  .login-input:focus { border-color: var(--accent); }
+  .login-btn { width: 100%; margin-top: 14px; justify-content: center; }
+  .login-error { color: var(--danger-text); font-size: 13px; margin-top: 12px; min-height: 1em; }
+</style>
+</head>
+<body>
+  <div class="login-card">
+    <div class="login-title"><span class="brand-ar">القرآن</span><span>Quran Research Directory</span></div>
+    <form id="login-form">
+      <input class="login-input" id="login-password" type="password" placeholder="Password" autofocus autocomplete="current-password" />
+      <button class="nav-btn primary login-btn" type="submit">Sign in</button>
+      <div class="login-error" id="login-error"></div>
+    </form>
+  </div>
+  <script>
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const password = document.getElementById('login-password').value;
+      const errEl = document.getElementById('login-error');
+      errEl.textContent = '';
+      try {
+        const r = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+        if (r.ok) {
+          const params = new URLSearchParams(window.location.search);
+          window.location.href = params.get('next') || '/';
+        } else {
+          errEl.textContent = 'Incorrect password.';
+        }
+      } catch {
+        errEl.textContent = "Can't reach the server.";
+      }
+    });
+  </script>
+</body>
+</html>

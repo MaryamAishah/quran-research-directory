@@ -6,6 +6,7 @@ const CANDIDATE_PATHS = [
   'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
   'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  '/usr/bin/chromium',
   '/usr/bin/google-chrome',
   '/usr/bin/chromium-browser',
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -13,6 +14,9 @@ const CANDIDATE_PATHS = [
 ];
 
 function findBrowserExecutable() {
+  if (process.env.PDF_BROWSER_PATH && fs.existsSync(process.env.PDF_BROWSER_PATH)) {
+    return process.env.PDF_BROWSER_PATH;
+  }
   return CANDIDATE_PATHS.find(p => fs.existsSync(p)) || null;
 }
 

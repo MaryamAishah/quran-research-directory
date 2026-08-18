@@ -1,9 +1,9 @@
-import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import mammoth from 'mammoth';
 import { PDFParse } from 'pdf-parse';
-import { IMAGES_DIR } from './docStore.js';
+import { IMAGES_PREFIX } from './docStore.js';
+import * as storage from './storage.js';
 
 function escapeHtml(str) {
   return String(str)
@@ -27,14 +27,12 @@ export function txtToHtml(buffer) {
 // DOCX -> HTML via mammoth, keeping headings/bold/italic/lists and saving
 // embedded images into the same media store used by the editor.
 export async function docxToHtml(buffer, docId) {
-  const dir = path.join(IMAGES_DIR, docId);
   const result = await mammoth.convertToHtml({ buffer }, {
     convertImage: mammoth.images.imgElement(async (image) => {
-      fs.mkdirSync(dir, { recursive: true });
       const b64 = await image.readAsBase64String();
       const ext = (image.contentType || 'image/png').split('/').pop().split('+')[0];
       const filename = `${crypto.randomUUID()}.${ext}`;
-      fs.writeFileSync(path.join(dir, filename), Buffer.from(b64, 'base64'));
+      await storage.writeBinary(`${IMAGES_PREFIX}${docId}/${filename}`, Buffer.from(b64, 'base64'), image.contentType || 'image/png');
       return { src: `/media/${docId}/${filename}` };
     }),
   });

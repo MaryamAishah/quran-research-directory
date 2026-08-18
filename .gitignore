@@ -1,5 +1,6 @@
 node_modules/
-server/data/
+server/data/*
+!server/data/ayah-embeddings.json
 server/model-cache/
 *.log
 .DS_Store

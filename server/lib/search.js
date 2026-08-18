@@ -1,11 +1,11 @@
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { env, pipeline } from '@xenova/transformers';
 import { htmlToText } from './docStore.js';
+import * as storage from './storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const INDEX_PATH = path.join(__dirname, '..', 'data', 'search-index.json');
+const INDEX_KEY = 'search-index.json';
 
 // Keep the model cache inside the project so the vault is self-contained.
 env.cacheDir = path.join(__dirname, '..', 'model-cache');
@@ -22,22 +22,22 @@ function getExtractor() {
 // chunkId -> { docId, text, vector }
 let index = new Map();
 
-function loadIndex() {
-  if (fs.existsSync(INDEX_PATH)) {
-    try {
-      const raw = JSON.parse(fs.readFileSync(INDEX_PATH, 'utf8'));
-      index = new Map(raw.map(c => [c.chunkId, c]));
-    } catch {
-      index = new Map();
-    }
+async function loadIndex() {
+  const raw = await storage.readJson(INDEX_KEY);
+  if (Array.isArray(raw)) {
+    index = new Map(raw.map(c => [c.chunkId, c]));
   }
 }
 
 let saveTimer = null;
 function persistIndex() {
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    fs.writeFileSync(INDEX_PATH, JSON.stringify([...index.values()]), 'utf8');
+  saveTimer = setTimeout(async () => {
+    try {
+      await storage.writeJson(INDEX_KEY, [...index.values()]);
+    } catch (err) {
+      console.error('failed to persist search index', err);
+    }
   }, 300);
 }
 
@@ -117,4 +117,4 @@ export async function ensureModelWarm() {
   await getExtractor();
 }
 
-loadIndex();
+await loadIndex();

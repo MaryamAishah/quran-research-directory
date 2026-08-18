@@ -1,0 +1,11 @@
+node_modules
+.git
+.env
+.env.example
+*.log
+
+# User data lives in R2 (or is generated at build time), never baked into
+# the image, except the static Quran ayah-embeddings cache.
+server/data/*
+!server/data/ayah-embeddings.json
+server/model-cache

@@ -2,7 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { ayahByRef } from './quranData.js';
-import { docsForAyah, IMAGES_DIR } from './docStore.js';
+import { docsForAyah, IMAGES_PREFIX } from './docStore.js';
+import * as storage from './storage.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const FONT_PATH = path.join(__dirname, '..', '..', 'assets', 'fonts', 'AmiriQuran.ttf');
@@ -17,17 +18,19 @@ function fontBase64() {
 
 // Rewrite <img src="/media/..."> to embedded base64 data URIs so the export
 // is a fully self-contained file (no dependency on the running server).
-function inlineImages(html) {
-  return html.replace(/src="\/media\/([^"]+)"/g, (match, rel) => {
+async function inlineImages(html) {
+  const matches = [...html.matchAll(/src="\/media\/([^"]+)"/g)];
+  let result = html;
+  for (const match of matches) {
+    const rel = match[1];
     try {
-      const filePath = path.join(IMAGES_DIR, ...rel.split('/'));
-      const ext = path.extname(filePath).slice(1) || 'png';
-      const data = fs.readFileSync(filePath).toString('base64');
-      return `src="data:image/${ext};base64,${data}"`;
-    } catch {
-      return match;
-    }
-  });
+      const ext = path.extname(rel).slice(1) || 'png';
+      const file = await storage.readBinary(`${IMAGES_PREFIX}${rel}`);
+      if (!file) continue;
+      result = result.replace(match[0], `src="data:image/${ext};base64,${file.buffer.toString('base64')}"`);
+    } catch { /* leave original src if the image can't be read */ }
+  }
+  return result;
 }
 
 function escapeHtml(str) {
@@ -40,37 +43,43 @@ function escapeHtml(str) {
 // Builds the full sectioned HTML for the selected ayaat: each section leads
 // with the ayah reference, Arabic text, and translation, followed by every
 // document linked to that ayah.
-export function buildExportHtml(ayat) {
+export async function buildExportHtml(ayat) {
   const sorted = [...ayat].sort((a, b) => a.surah - b.surah || a.ayah - b.ayah);
   const seenDocIds = new Set();
 
-  const sections = sorted.map(({ surah: surahNum, ayah: ayahNum }) => {
+  const sections = [];
+  for (const { surah: surahNum, ayah: ayahNum } of sorted) {
     const ref = ayahByRef(surahNum, ayahNum);
-    if (!ref) return '';
+    if (!ref) continue;
     const { surah, ayah } = ref;
-    const docs = docsForAyah(surahNum, ayahNum);
+    const docs = await docsForAyah(surahNum, ayahNum);
 
-    const docsHtml = docs.length
-      ? docs.map(d => {
-          seenDocIds.add(d.id);
-          return `
-            <div class="doc-block">
-              <div class="doc-title">${escapeHtml(d.title)}</div>
-              <div class="doc-body">${inlineImages(d.html || '')}</div>
-            </div>
-          `;
-        }).join('')
-      : `<div class="doc-empty">No documents linked to this ayah.</div>`;
+    let docsHtml;
+    if (docs.length) {
+      const docBlocks = [];
+      for (const d of docs) {
+        seenDocIds.add(d.id);
+        docBlocks.push(`
+          <div class="doc-block">
+            <div class="doc-title">${escapeHtml(d.title)}</div>
+            <div class="doc-body">${await inlineImages(d.html || '')}</div>
+          </div>
+        `);
+      }
+      docsHtml = docBlocks.join('');
+    } else {
+      docsHtml = `<div class="doc-empty">No documents linked to this ayah.</div>`;
+    }
 
-    return `
+    sections.push(`
       <section class="ayah-section">
         <div class="ayah-ref">Surah ${surah.number} &middot; ${escapeHtml(surah.englishName)} (${escapeHtml(surah.englishNameTranslation)}) &mdash; Ayah ${ayah.n}</div>
         <div class="ayah-arabic">${ayah.ar}</div>
         <div class="ayah-translation"><span class="label">Sahih International</span>${escapeHtml(ayah.en)}</div>
         <div class="docs-wrap">${docsHtml}</div>
       </section>
-    `;
-  }).join('\n');
+    `);
+  }
 
   const generatedAt = new Date().toLocaleString(undefined, { dateStyle: 'long', timeStyle: 'short' });
 
@@ -165,7 +174,7 @@ export function buildExportHtml(ayat) {
 <body>
   <div class="export-title">Quran Research Export</div>
   <div class="export-meta">Generated ${generatedAt} &middot; ${sorted.length} ayah${sorted.length === 1 ? '' : 's'} &middot; ${seenDocIds.size} document${seenDocIds.size === 1 ? '' : 's'}</div>
-  ${sections}
+  ${sections.join('\n')}
 </body>
 </html>`;
 }

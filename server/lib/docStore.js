@@ -1,24 +1,16 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import * as storage from './storage.js';
 import { deletePassagesForDoc } from './passageStore.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const DOCS_DIR = path.join(DATA_DIR, 'documents');
-const IMAGES_DIR = path.join(DATA_DIR, 'images');
-const ORIGINALS_DIR = path.join(DATA_DIR, 'originals');
+const DOCS_PREFIX = 'documents/';
+const IMAGES_PREFIX = 'images/';
+const ORIGINALS_PREFIX = 'originals/';
 
-fs.mkdirSync(DOCS_DIR, { recursive: true });
-fs.mkdirSync(IMAGES_DIR, { recursive: true });
-fs.mkdirSync(ORIGINALS_DIR, { recursive: true });
+function docKey(id) {
+  return `${DOCS_PREFIX}${id}.json`;
+}
 
 const DOC_LINK_RE = /href="#\/doc\/([a-f0-9-]{36})"/g;
-
-function docPath(id) {
-  return path.join(DOCS_DIR, `${id}.json`);
-}
 
 function extractWikiLinks(html) {
   const links = new Set();
@@ -48,20 +40,16 @@ function htmlToText(html) {
     .trim();
 }
 
-export function listDocs() {
-  return fs.readdirSync(DOCS_DIR)
-    .filter(f => f.endsWith('.json'))
-    .map(f => JSON.parse(fs.readFileSync(path.join(DOCS_DIR, f), 'utf8')))
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+export async function listDocs() {
+  const docs = await storage.listJson(DOCS_PREFIX);
+  return docs.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
-export function getDoc(id) {
-  const p = docPath(id);
-  if (!fs.existsSync(p)) return null;
-  return JSON.parse(fs.readFileSync(p, 'utf8'));
+export async function getDoc(id) {
+  return storage.readJson(docKey(id));
 }
 
-export function createDoc({ title, html, linkedAyat, id, sourceFile, autoDetect }) {
+export async function createDoc({ title, html, linkedAyat, id, sourceFile, autoDetect }) {
   id = id && /^[a-f0-9-]{36}$/.test(id) ? id : crypto.randomUUID();
   const now = Date.now();
   const doc = {
@@ -76,12 +64,12 @@ export function createDoc({ title, html, linkedAyat, id, sourceFile, autoDetect 
     createdAt: now,
     updatedAt: now,
   };
-  fs.writeFileSync(docPath(id), JSON.stringify(doc, null, 2), 'utf8');
+  await storage.writeJson(docKey(id), doc);
   return doc;
 }
 
-export function updateDoc(id, { title, html, linkedAyat, autoDetect }) {
-  const existing = getDoc(id);
+export async function updateDoc(id, { title, html, linkedAyat, autoDetect }) {
+  const existing = await getDoc(id);
   if (!existing) return null;
   const updated = {
     ...existing,
@@ -94,41 +82,38 @@ export function updateDoc(id, { title, html, linkedAyat, autoDetect }) {
     updatedAt: Date.now(),
   };
   updated.wikiLinks = extractWikiLinks(updated.html);
-  fs.writeFileSync(docPath(id), JSON.stringify(updated, null, 2), 'utf8');
+  await storage.writeJson(docKey(id), updated);
   return updated;
 }
 
-export function setProcessing(id, patch) {
-  const existing = getDoc(id);
+export async function setProcessing(id, patch) {
+  const existing = await getDoc(id);
   if (!existing) return null;
   const updated = {
     ...existing,
     processing: { ...(existing.processing || {}), ...patch, updatedAt: Date.now() },
   };
-  fs.writeFileSync(docPath(id), JSON.stringify(updated, null, 2), 'utf8');
+  await storage.writeJson(docKey(id), updated);
   return updated;
 }
 
-export function deleteDoc(id) {
-  const p = docPath(id);
-  if (!fs.existsSync(p)) return false;
-  fs.unlinkSync(p);
-  const imgDir = path.join(IMAGES_DIR, id);
-  if (fs.existsSync(imgDir)) fs.rmSync(imgDir, { recursive: true, force: true });
-  const origDir = path.join(ORIGINALS_DIR, id);
-  if (fs.existsSync(origDir)) fs.rmSync(origDir, { recursive: true, force: true });
-  deletePassagesForDoc(id);
+export async function deleteDoc(id) {
+  const deleted = await storage.deleteObject(docKey(id));
+  if (!deleted) return false;
+  await storage.deletePrefix(`${IMAGES_PREFIX}${id}/`);
+  await storage.deletePrefix(`${ORIGINALS_PREFIX}${id}/`);
+  await deletePassagesForDoc(id);
   return true;
 }
 
-export function docsForAyah(surah, ayah) {
-  return listDocs().filter(d =>
-    d.linkedAyat.some(a => a.surah === surah && a.ayah === ayah)
-  );
+export async function docsForAyah(surah, ayah) {
+  const docs = await listDocs();
+  return docs.filter(d => d.linkedAyat.some(a => a.surah === surah && a.ayah === ayah));
 }
 
-export function backlinksFor(id) {
-  return listDocs().filter(d => d.id !== id && d.wikiLinks.includes(id));
+export async function backlinksFor(id) {
+  const docs = await listDocs();
+  return docs.filter(d => d.id !== id && d.wikiLinks.includes(id));
 }
 
-export { htmlToText, IMAGES_DIR, DOCS_DIR, ORIGINALS_DIR };
+export { htmlToText, IMAGES_PREFIX, ORIGINALS_PREFIX };

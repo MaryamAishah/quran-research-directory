@@ -1,7 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
 import multer from 'multer';
-import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
@@ -10,7 +9,7 @@ import http from 'http';
 
 import {
   listDocs, getDoc, createDoc, updateDoc, deleteDoc,
-  docsForAyah, backlinksFor, IMAGES_DIR, ORIGINALS_DIR,
+  docsForAyah, backlinksFor, IMAGES_PREFIX, ORIGINALS_PREFIX,
 } from './lib/docStore.js';
 import { reindexDoc, removeDocFromIndex, semanticSearch, ensureModelWarm } from './lib/search.js';
 import { buildExportHtml } from './lib/exportBuilder.js';
@@ -21,6 +20,8 @@ import { processDocument } from './lib/passagePipeline.js';
 import { ensureAyahEmbeddingsReady } from './lib/ayahEmbeddings.js';
 import { passagesForDoc, passagesForAyah, passagesNeedingReview, getPassage, updatePassage } from './lib/passageStore.js';
 import { ayahByRef } from './lib/quranData.js';
+import * as storage from './lib/storage.js';
+import * as auth from './lib/auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -29,32 +30,92 @@ const PORT = process.env.PORT || 5678;
 const app = express();
 app.use(express.json({ limit: '15mb' }));
 
+// ---------- Auth ----------
+// Entirely opt-in via APP_PASSWORD - unset locally, so local use is
+// unaffected; set on the hosted deployment to gate access.
+const PUBLIC_PATHS = new Set(['/login', '/api/login', '/api/logout', '/api/auth-status', '/healthz']);
+app.use((req, res, next) => {
+  if (!auth.isAuthRequired()) return next();
+  if (PUBLIC_PATHS.has(req.path) || req.path.startsWith('/assets/')) return next();
+  if (auth.isRequestAuthenticated(req)) return next();
+  if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Authentication required' });
+  res.redirect(`/login?next=${encodeURIComponent(req.originalUrl)}`);
+});
+
+app.get('/login', (req, res) => res.sendFile(path.join(ROOT, 'login.html')));
+
+app.post('/api/login', (req, res) => {
+  if (!auth.verifyPassword(req.body?.password)) {
+    return res.status(401).json({ error: 'Incorrect password' });
+  }
+  auth.setSessionCookie(req, res);
+  res.json({ ok: true });
+});
+
+app.post('/api/logout', (req, res) => {
+  auth.clearSessionCookie(res);
+  res.json({ ok: true });
+});
+
+app.get('/api/auth-status', (req, res) => {
+  res.json({ required: auth.isAuthRequired(), authenticated: auth.isRequestAuthenticated(req) });
+});
+
+app.get('/healthz', (req, res) => res.json({ ok: true }));
+
 // ---------- Static site ----------
 // Only the public site files are served - not node_modules, server source, or raw document JSON.
 app.get('/', (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
 app.get('/index.html', (req, res) => res.sendFile(path.join(ROOT, 'index.html')));
 app.use('/assets', express.static(path.join(ROOT, 'assets')));
-app.use('/media', express.static(IMAGES_DIR));
-app.use('/originals', express.static(ORIGINALS_DIR));
 
-// ---------- Documents CRUD ----------
-app.get('/api/docs', (req, res) => {
-  res.json(listDocs());
+function guessContentType(filename) {
+  const ext = path.extname(filename).toLowerCase();
+  const map = {
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
+    '.webp': 'image/webp', '.svg': 'image/svg+xml', '.bmp': 'image/bmp',
+    '.pdf': 'application/pdf', '.txt': 'text/plain',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  };
+  return map[ext] || 'application/octet-stream';
+}
+
+// Images/originals are proxied (not statically served) since R2 objects
+// aren't public - this is the same code path for local and cloud storage,
+// and sits behind the auth middleware above like everything else.
+app.get('/media/:docId/:filename', async (req, res) => {
+  const file = await storage.readBinary(`${IMAGES_PREFIX}${req.params.docId}/${req.params.filename}`);
+  if (!file) return res.status(404).send('Not found');
+  res.setHeader('Content-Type', file.contentType || guessContentType(req.params.filename));
+  res.send(file.buffer);
 });
 
-app.get('/api/docs/:id', (req, res) => {
-  const doc = getDoc(req.params.id);
+app.get('/originals/:docId/:filename', async (req, res) => {
+  const file = await storage.readBinary(`${ORIGINALS_PREFIX}${req.params.docId}/${req.params.filename}`);
+  if (!file) return res.status(404).send('Not found');
+  res.setHeader('Content-Type', file.contentType || guessContentType(req.params.filename));
+  res.setHeader('Content-Disposition', `attachment; filename="${req.params.filename}"`);
+  res.send(file.buffer);
+});
+
+// ---------- Documents CRUD ----------
+app.get('/api/docs', async (req, res) => {
+  res.json(await listDocs());
+});
+
+app.get('/api/docs/:id', async (req, res) => {
+  const doc = await getDoc(req.params.id);
   if (!doc) return res.status(404).json({ error: 'Not found' });
   res.json(doc);
 });
 
-app.get('/api/docs/:id/backlinks', (req, res) => {
-  res.json(backlinksFor(req.params.id));
+app.get('/api/docs/:id/backlinks', async (req, res) => {
+  res.json(await backlinksFor(req.params.id));
 });
 
 app.post('/api/docs', async (req, res) => {
   const { title, html, linkedAyat, id, autoDetect } = req.body;
-  const doc = createDoc({ title, html, linkedAyat, id, autoDetect });
+  const doc = await createDoc({ title, html, linkedAyat, id, autoDetect });
   reindexDoc(doc).catch(err => console.error('reindex failed', err));
   if (doc.autoDetect) {
     processDocument(doc.id).catch(err => console.error('passage processing failed', err));
@@ -64,7 +125,7 @@ app.post('/api/docs', async (req, res) => {
 
 app.put('/api/docs/:id', async (req, res) => {
   const { title, html, linkedAyat, autoDetect } = req.body;
-  const doc = updateDoc(req.params.id, { title, html, linkedAyat, autoDetect });
+  const doc = await updateDoc(req.params.id, { title, html, linkedAyat, autoDetect });
   if (!doc) return res.status(404).json({ error: 'Not found' });
   reindexDoc(doc).catch(err => console.error('reindex failed', err));
   // Only processes when the document is (now) opted in - covers both new
@@ -75,57 +136,57 @@ app.put('/api/docs/:id', async (req, res) => {
   res.json(doc);
 });
 
-app.delete('/api/docs/:id', (req, res) => {
-  const ok = deleteDoc(req.params.id);
+app.delete('/api/docs/:id', async (req, res) => {
+  const ok = await deleteDoc(req.params.id);
   removeDocFromIndex(req.params.id);
   res.json({ ok });
 });
 
 // ---------- Ayah linking ----------
-app.get('/api/ayah/:surah/:ayah/docs', (req, res) => {
+app.get('/api/ayah/:surah/:ayah/docs', async (req, res) => {
   const surah = parseInt(req.params.surah, 10);
   const ayah = parseInt(req.params.ayah, 10);
-  res.json(docsForAyah(surah, ayah));
+  res.json(await docsForAyah(surah, ayah));
 });
 
 // ---------- Passage-to-ayah matching pipeline ----------
 app.post('/api/docs/:id/process', async (req, res) => {
-  const doc = getDoc(req.params.id);
+  const doc = await getDoc(req.params.id);
   if (!doc) return res.status(404).json({ error: 'Not found' });
   try {
     await processDocument(req.params.id, { force: !!req.body?.force });
-    res.json(getDoc(req.params.id));
+    res.json(await getDoc(req.params.id));
   } catch (err) {
     console.error('manual process failed', err);
     res.status(500).json({ error: err.message || 'Processing failed' });
   }
 });
 
-app.get('/api/docs/:id/passages', (req, res) => {
-  res.json(passagesForDoc(req.params.id));
+app.get('/api/docs/:id/passages', async (req, res) => {
+  res.json(await passagesForDoc(req.params.id));
 });
 
-app.get('/api/ayah/:surah/:ayah/passages', (req, res) => {
+app.get('/api/ayah/:surah/:ayah/passages', async (req, res) => {
   const surah = parseInt(req.params.surah, 10);
   const ayah = parseInt(req.params.ayah, 10);
-  const hits = passagesForAyah(surah, ayah);
-  const docsById = new Map(listDocs().map(d => [d.id, d]));
+  const hits = await passagesForAyah(surah, ayah);
+  const docsById = new Map((await listDocs()).map(d => [d.id, d]));
   const enriched = hits
     .map(h => ({ ...h, doc: docsById.get(h.passage.docId) }))
     .filter(h => h.doc);
   res.json(enriched);
 });
 
-app.get('/api/review-queue', (req, res) => {
-  const docsById = new Map(listDocs().map(d => [d.id, d]));
-  const enriched = passagesNeedingReview()
+app.get('/api/review-queue', async (req, res) => {
+  const docsById = new Map((await listDocs()).map(d => [d.id, d]));
+  const enriched = (await passagesNeedingReview())
     .map(p => ({ passage: p, doc: docsById.get(p.docId) }))
     .filter(p => p.doc);
   res.json(enriched);
 });
 
-app.post('/api/passages/:id/review', (req, res) => {
-  const passage = getPassage(req.params.id);
+app.post('/api/passages/:id/review', async (req, res) => {
+  const passage = await getPassage(req.params.id);
   if (!passage) return res.status(404).json({ error: 'Not found' });
   const { action, matchIndex, matches } = req.body;
 
@@ -135,7 +196,7 @@ app.post('/api/passages/:id/review', (req, res) => {
     }
     const updated = [...passage.matches];
     updated[matchIndex] = { ...updated[matchIndex], status: action === 'accept' ? 'accepted' : 'rejected' };
-    return res.json(updatePassage(passage.id, { matches: updated }));
+    return res.json(await updatePassage(passage.id, { matches: updated }));
   }
 
   if (action === 'set') {
@@ -147,7 +208,7 @@ app.post('/api/passages/:id/review', (req, res) => {
       if (!ayahByRef(surah, ayah)) continue; // reject invalid refs (requirement #15)
       validated.push({ surah, ayah, confidence: 1, source: 'manual', status: 'accepted' });
     }
-    return res.json(updatePassage(passage.id, { matches: validated }));
+    return res.json(await updatePassage(passage.id, { matches: validated }));
   }
 
   res.status(400).json({ error: 'Unknown action' });
@@ -157,7 +218,7 @@ app.post('/api/passages/:id/review', (req, res) => {
 app.get('/api/search', async (req, res) => {
   try {
     const results = await semanticSearch(req.query.q || '', 12);
-    const docsById = new Map(listDocs().map(d => [d.id, d]));
+    const docsById = new Map((await listDocs()).map(d => [d.id, d]));
     const enriched = results
       .map(r => ({ ...r, doc: docsById.get(r.docId) }))
       .filter(r => r.doc);
@@ -171,14 +232,12 @@ app.get('/api/search', async (req, res) => {
 // ---------- Image upload (from editor toolbar) ----------
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
-app.post('/api/upload-image', upload.single('image'), (req, res) => {
+app.post('/api/upload-image', upload.single('image'), async (req, res) => {
   const docId = req.body.docId || 'unlinked';
   if (!req.file) return res.status(400).json({ error: 'No file' });
-  const dir = path.join(IMAGES_DIR, docId);
-  fs.mkdirSync(dir, { recursive: true });
   const safeExt = (path.extname(req.file.originalname) || '.png').slice(0, 10);
   const filename = `${crypto.randomUUID()}${safeExt}`;
-  fs.writeFileSync(path.join(dir, filename), req.file.buffer);
+  await storage.writeBinary(`${IMAGES_PREFIX}${docId}/${filename}`, req.file.buffer, req.file.mimetype);
   res.json({ url: `/media/${docId}/${filename}` });
 });
 
@@ -201,10 +260,8 @@ app.post('/api/docs/upload', upload.single('file'), async (req, res) => {
 
     // Preserve the original upload untouched, regardless of what the HTML
     // conversion produced (requirement: source traceability).
-    const origDir = path.join(ORIGINALS_DIR, id);
-    fs.mkdirSync(origDir, { recursive: true });
     const storedName = `original${ext}`;
-    fs.writeFileSync(path.join(origDir, storedName), req.file.buffer);
+    await storage.writeBinary(`${ORIGINALS_PREFIX}${id}/${storedName}`, req.file.buffer, req.file.mimetype);
     const sourceFile = {
       originalName: req.file.originalname,
       storedName,
@@ -212,7 +269,7 @@ app.post('/api/docs/upload', upload.single('file'), async (req, res) => {
       size: req.file.size,
     };
 
-    const doc = createDoc({ id, title, html, linkedAyat, sourceFile, autoDetect });
+    const doc = await createDoc({ id, title, html, linkedAyat, sourceFile, autoDetect });
     reindexDoc(doc).catch(err => console.error('reindex failed', err));
     if (doc.autoDetect) {
       processDocument(doc.id).catch(err => console.error('passage processing failed', err));
@@ -228,16 +285,15 @@ app.post('/api/docs/upload', upload.single('file'), async (req, res) => {
 app.post('/api/import-image', async (req, res) => {
   try {
     const { docId, dataUrl, sourceUrl } = req.body;
-    const dir = path.join(IMAGES_DIR, docId || 'unlinked');
-    fs.mkdirSync(dir, { recursive: true });
+    const dir = docId || 'unlinked';
 
     if (dataUrl && dataUrl.startsWith('data:')) {
       const match = /^data:image\/(\w+);base64,(.+)$/.exec(dataUrl);
       if (!match) return res.status(400).json({ error: 'Bad data URL' });
-      const ext = '.' + match[1].split('+')[0];
-      const filename = `${crypto.randomUUID()}${ext}`;
-      fs.writeFileSync(path.join(dir, filename), Buffer.from(match[2], 'base64'));
-      return res.json({ url: `/media/${docId}/${filename}` });
+      const ext = match[1].split('+')[0];
+      const filename = `${crypto.randomUUID()}.${ext}`;
+      await storage.writeBinary(`${IMAGES_PREFIX}${dir}/${filename}`, Buffer.from(match[2], 'base64'), `image/${ext}`);
+      return res.json({ url: `/media/${dir}/${filename}` });
     }
 
     if (sourceUrl && /^https?:\/\//.test(sourceUrl)) {
@@ -252,8 +308,8 @@ app.post('/api/import-image', async (req, res) => {
       });
       const ext = path.extname(new URL(sourceUrl).pathname) || '.png';
       const filename = `${crypto.randomUUID()}${ext}`;
-      fs.writeFileSync(path.join(dir, filename), buf);
-      return res.json({ url: `/media/${docId}/${filename}` });
+      await storage.writeBinary(`${IMAGES_PREFIX}${dir}/${filename}`, buf, guessContentType(filename));
+      return res.json({ url: `/media/${dir}/${filename}` });
     }
 
     res.status(400).json({ error: 'No image source provided' });
@@ -270,7 +326,7 @@ app.post('/api/export', async (req, res) => {
     if (!Array.isArray(ayat) || !ayat.length) {
       return res.status(400).json({ error: 'No ayaat selected' });
     }
-    const html = buildExportHtml(ayat);
+    const html = await buildExportHtml(ayat);
 
     if (format === 'docx') {
       const buffer = await htmlToDocx(html);
@@ -291,6 +347,8 @@ app.post('/api/export', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Quran Research Directory running at http://localhost:${PORT}`);
+  console.log(`Storage backend: ${storage.isCloudStorage() ? 'Cloudflare R2' : 'local filesystem'}`);
+  console.log(`Login required: ${auth.isAuthRequired()}`);
   ensureModelWarm().then(() => console.log('Semantic search model ready.'));
   ensureAyahEmbeddingsReady().then(() => console.log('Ayah embedding index ready.'));
 });

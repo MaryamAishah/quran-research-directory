@@ -13,17 +13,32 @@ function surahByNumber(num) {
 // load time and gracefully fall back to a read-only reader.
 let HAS_BACKEND = true;
 
+// Returns true if a redirect to /login was triggered (caller should bail
+// out and skip rendering, since navigation is about to happen).
 async function detectBackend() {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 1500);
     const r = await fetch('/api/docs', { signal: ctrl.signal, cache: 'no-store' });
     clearTimeout(timer);
+    if (r.status === 401) {
+      const dest = window.location.pathname + window.location.search + window.location.hash;
+      window.location.href = `/login?next=${encodeURIComponent(dest)}`;
+      return true;
+    }
     HAS_BACKEND = r.ok;
   } catch {
     HAS_BACKEND = false;
   }
   document.body.classList.toggle('no-backend', !HAS_BACKEND);
+
+  if (HAS_BACKEND) {
+    try {
+      const status = await (await fetch('/api/auth-status', { cache: 'no-store' })).json();
+      document.getElementById('logout-link').style.display = status.required ? '' : 'none';
+    } catch { /* logout link just stays hidden */ }
+  }
+  return false;
 }
 
 // ---------- Router ----------
@@ -86,8 +101,14 @@ window.addEventListener('hashchange', render);
 window.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('brand').addEventListener('click', () => navigate('#/'));
   document.getElementById('search-box').addEventListener('input', onSearch);
+  document.getElementById('logout-link').addEventListener('click', async (e) => {
+    e.preventDefault();
+    await fetch('/api/logout', { method: 'POST' });
+    window.location.href = '/login';
+  });
   initThemeToggle();
-  await detectBackend();
+  const redirecting = await detectBackend();
+  if (redirecting) return;
   render();
 });
 
