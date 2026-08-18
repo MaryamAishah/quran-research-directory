@@ -14,30 +14,32 @@ function surahByNumber(num) {
 let HAS_BACKEND = true;
 
 // Returns true if a redirect to /login was triggered (caller should bail
-// out and skip rendering, since navigation is about to happen).
+// out and skip rendering, since navigation is about to happen). Pings
+// lightweight, unauthenticated endpoints only (/healthz, /api/auth-status)
+// rather than /api/docs, which would otherwise trigger a full document-list
+// read on every single page load just to check connectivity.
 async function detectBackend() {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 4000);
-    const r = await fetch('/api/docs', { signal: ctrl.signal, cache: 'no-store' });
+    const r = await fetch('/healthz', { signal: ctrl.signal, cache: 'no-store' });
     clearTimeout(timer);
-    if (r.status === 401) {
-      const dest = window.location.pathname + window.location.search + window.location.hash;
-      window.location.href = `/login?next=${encodeURIComponent(dest)}`;
-      return true;
-    }
     HAS_BACKEND = r.ok;
   } catch {
     HAS_BACKEND = false;
   }
   document.body.classList.toggle('no-backend', !HAS_BACKEND);
+  if (!HAS_BACKEND) return false;
 
-  if (HAS_BACKEND) {
-    try {
-      const status = await (await fetch('/api/auth-status', { cache: 'no-store' })).json();
-      document.getElementById('logout-link').style.display = status.required ? '' : 'none';
-    } catch { /* logout link just stays hidden */ }
-  }
+  try {
+    const status = await (await fetch('/api/auth-status', { cache: 'no-store' })).json();
+    document.getElementById('logout-link').style.display = status.required ? '' : 'none';
+    if (status.required && !status.authenticated) {
+      const dest = window.location.pathname + window.location.search + window.location.hash;
+      window.location.href = `/login?next=${encodeURIComponent(dest)}`;
+      return true;
+    }
+  } catch { /* logout link just stays hidden; not fatal */ }
   return false;
 }
 

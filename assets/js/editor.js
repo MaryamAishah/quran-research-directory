@@ -21,8 +21,13 @@ async function renderEditor({ mode, id, prefillSurah, prefillAyah }) {
           <div class="page-title" style="margin:0;">${isNew ? 'New Document' : 'Edit Document'}</div>
         </div>
         ${!isNew ? '<button class="nav-btn danger" id="editor-delete">Delete</button>' : ''}
-        <button class="nav-btn primary" id="editor-save">Save</button>
+        <button class="nav-btn primary" id="editor-save">
+          <span class="btn-spinner" id="editor-save-spinner" style="display:none;"></span>
+          <span id="editor-save-label">Save</span>
+        </button>
       </div>
+
+      <div class="editor-error" id="editor-error"></div>
 
       <input class="title-input" id="doc-title" type="text" placeholder="Document title" value="${escapeAttr(doc?.title || '')}" />
 
@@ -135,19 +140,34 @@ async function renderEditor({ mode, id, prefillSurah, prefillAyah }) {
     history.back();
   });
 
-  document.getElementById('editor-save').addEventListener('click', async () => {
-    const title = document.getElementById('doc-title').value.trim() || 'Untitled document';
-    const html = quill.root.innerHTML;
-    const linkedAyat = picker.isGeneral() ? [] : picker.getAyat();
-    const linkedSurahs = picker.isGeneral() ? [] : picker.getSurahs();
-    const autoDetect = document.getElementById('auto-detect-toggle').checked;
-    let saved;
-    if (isNew) {
-      saved = await API.createDoc({ id: draftId, title, html, linkedAyat, linkedSurahs, autoDetect });
-    } else {
-      saved = await API.updateDoc(id, { title, html, linkedAyat, linkedSurahs, autoDetect });
+  const saveBtn = document.getElementById('editor-save');
+  const saveSpinner = document.getElementById('editor-save-spinner');
+  const saveLabel = document.getElementById('editor-save-label');
+  const errorEl = document.getElementById('editor-error');
+
+  function setSaving(saving) {
+    saveBtn.disabled = saving;
+    saveSpinner.style.display = saving ? '' : 'none';
+    saveLabel.textContent = saving ? 'Saving…' : 'Save';
+  }
+
+  saveBtn.addEventListener('click', async () => {
+    errorEl.textContent = '';
+    setSaving(true);
+    try {
+      const title = document.getElementById('doc-title').value.trim() || 'Untitled document';
+      const html = quill.root.innerHTML;
+      const linkedAyat = picker.isGeneral() ? [] : picker.getAyat();
+      const linkedSurahs = picker.isGeneral() ? [] : picker.getSurahs();
+      const autoDetect = document.getElementById('auto-detect-toggle').checked;
+      const saved = isNew
+        ? await API.createDoc({ id: draftId, title, html, linkedAyat, linkedSurahs, autoDetect })
+        : await API.updateDoc(id, { title, html, linkedAyat, linkedSurahs, autoDetect });
+      navigate(`#/doc/${saved.id}`);
+    } catch (e) {
+      errorEl.textContent = 'Save failed: ' + e.message;
+      setSaving(false);
     }
-    navigate(`#/doc/${saved.id}`);
   });
 
   if (!isNew) {

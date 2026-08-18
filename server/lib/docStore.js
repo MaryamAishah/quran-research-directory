@@ -40,13 +40,30 @@ function htmlToText(html) {
     .trim();
 }
 
-export async function listDocs() {
+// In-memory write-through cache. The document list is read constantly
+// (reader page alone hits it 3-4x per ayah) but written rarely, and R2
+// round-trips dominate load time - caching this is what actually fixes
+// the sluggishness rather than shaving individual request latency.
+// Safe for a single-process app (the normal way this runs); every write
+// here updates the cache in the same step it writes to storage, so it
+// never serves stale data to itself.
+let cache = null; // Map<id, doc> | null (null = not yet loaded)
+
+async function ensureCache() {
+  if (cache) return cache;
   const docs = await storage.listJson(DOCS_PREFIX);
-  return docs.sort((a, b) => b.updatedAt - a.updatedAt);
+  cache = new Map(docs.map(d => [d.id, d]));
+  return cache;
+}
+
+export async function listDocs() {
+  const c = await ensureCache();
+  return [...c.values()].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 export async function getDoc(id) {
-  return storage.readJson(docKey(id));
+  const c = await ensureCache();
+  return c.get(id) || null;
 }
 
 export async function createDoc({ title, html, linkedAyat, linkedSurahs, id, sourceFile, autoDetect }) {
@@ -66,6 +83,7 @@ export async function createDoc({ title, html, linkedAyat, linkedSurahs, id, sou
     updatedAt: now,
   };
   await storage.writeJson(docKey(id), doc);
+  (await ensureCache()).set(id, doc);
   return doc;
 }
 
@@ -85,6 +103,7 @@ export async function updateDoc(id, { title, html, linkedAyat, linkedSurahs, aut
   };
   updated.wikiLinks = extractWikiLinks(updated.html);
   await storage.writeJson(docKey(id), updated);
+  (await ensureCache()).set(id, updated);
   return updated;
 }
 
@@ -96,6 +115,7 @@ export async function setProcessing(id, patch) {
     processing: { ...(existing.processing || {}), ...patch, updatedAt: Date.now() },
   };
   await storage.writeJson(docKey(id), updated);
+  (await ensureCache()).set(id, updated);
   return updated;
 }
 
@@ -105,6 +125,7 @@ export async function deleteDoc(id) {
   await storage.deletePrefix(`${IMAGES_PREFIX}${id}/`);
   await storage.deletePrefix(`${ORIGINALS_PREFIX}${id}/`);
   await deletePassagesForDoc(id);
+  (await ensureCache()).delete(id);
   return true;
 }
 

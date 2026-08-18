@@ -16,6 +16,10 @@ const API = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, title, html, linkedAyat, linkedSurahs, autoDetect }),
     });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || 'Save failed');
+    }
     return r.json();
   },
   async updateDoc(id, { title, html, linkedAyat, linkedSurahs, autoDetect }) {
@@ -24,6 +28,10 @@ const API = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ title, html, linkedAyat, linkedSurahs, autoDetect }),
     });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      throw new Error(err.error || 'Save failed');
+    }
     return r.json();
   },
   async deleteDoc(id) {

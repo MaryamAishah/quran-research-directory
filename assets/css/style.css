@@ -325,6 +325,19 @@ body.no-backend .top-nav a[href="#/review"] { display: none; }
 }
 .nav-btn:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 .nav-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.nav-btn:disabled:has(.btn-spinner) { opacity: 0.75; cursor: wait; }
+
+.btn-spinner {
+  display: inline-block;
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  opacity: 0.7;
+  animation: btn-spin 0.65s linear infinite;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
 
 .ayah-select {
   background: var(--bg-card);
@@ -803,6 +816,14 @@ body.no-backend .top-nav a[href="#/review"] { display: none; }
 .export-status {
   font-size: 13px;
   color: var(--text-muted);
+}
+
+.editor-error {
+  font-size: 13px;
+  color: var(--danger-text);
+  text-align: right;
+  min-height: 0;
+  margin-top: 4px;
 }
 
 /* ---------- Matched passages (reader + doc view) ---------- */

@@ -250,7 +250,10 @@ async function renderUploadPage() {
       </label>
 
       <div class="export-actions">
-        <button class="nav-btn primary" id="upload-btn">Upload</button>
+        <button class="nav-btn primary" id="upload-btn">
+          <span class="btn-spinner" id="upload-spinner" style="display:none;"></span>
+          <span id="upload-btn-label">Upload</span>
+        </button>
         <span id="upload-status" class="export-status"></span>
       </div>
     </div>
@@ -282,7 +285,11 @@ async function renderUploadPage() {
       return;
     }
     const btn = document.getElementById('upload-btn');
+    const spinner = document.getElementById('upload-spinner');
+    const btnLabel = document.getElementById('upload-btn-label');
     btn.disabled = true;
+    spinner.style.display = '';
+    btnLabel.textContent = 'Uploading…';
     statusEl.textContent = 'Uploading and converting…';
     try {
       const linkedAyat = picker.isGeneral() ? [] : picker.getAyat();
@@ -293,6 +300,8 @@ async function renderUploadPage() {
     } catch (e) {
       statusEl.textContent = 'Upload failed: ' + e.message;
       btn.disabled = false;
+      spinner.style.display = 'none';
+      btnLabel.textContent = 'Upload';
     }
   });
 }

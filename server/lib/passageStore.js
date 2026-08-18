@@ -7,13 +7,26 @@ function passageKey(id) {
   return `${PASSAGES_PREFIX}${id}.json`;
 }
 
-async function listPassages() {
+// Same write-through in-memory cache strategy as docStore.js - see the
+// comment there for why. Passages are read even more often than docs
+// (every ayah page queries matches across the whole passage set).
+let cache = null; // Map<id, passage> | null
+
+async function ensureCache() {
+  if (cache) return cache;
   const passages = await storage.listJson(PASSAGES_PREFIX);
-  return passages.sort((a, b) => a.docId.localeCompare(b.docId) || a.order - b.order);
+  cache = new Map(passages.map(p => [p.id, p]));
+  return cache;
+}
+
+async function listPassages() {
+  const c = await ensureCache();
+  return [...c.values()].sort((a, b) => a.docId.localeCompare(b.docId) || a.order - b.order);
 }
 
 async function getPassage(id) {
-  return storage.readJson(passageKey(id));
+  const c = await ensureCache();
+  return c.get(id) || null;
 }
 
 async function createPassage({ docId, order, location, html, text }) {
@@ -32,6 +45,7 @@ async function createPassage({ docId, order, location, html, text }) {
     updatedAt: now,
   };
   await storage.writeJson(passageKey(id), passage);
+  (await ensureCache()).set(id, passage);
   return passage;
 }
 
@@ -40,11 +54,14 @@ async function updatePassage(id, patch) {
   if (!existing) return null;
   const updated = { ...existing, ...patch, id: existing.id, updatedAt: Date.now() };
   await storage.writeJson(passageKey(id), updated);
+  (await ensureCache()).set(id, updated);
   return updated;
 }
 
 async function deletePassage(id) {
-  return storage.deleteObject(passageKey(id));
+  const deleted = await storage.deleteObject(passageKey(id));
+  if (deleted) (await ensureCache()).delete(id);
+  return deleted;
 }
 
 async function deletePassagesForDoc(docId) {
